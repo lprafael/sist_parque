@@ -7,7 +7,7 @@ services:
     container_name: parque_backend
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8081:8000"
     environment:
       - DB_HOST=${DB_HOST:-168.90.177.232}
       - DB_PORT=${DB_PORT:-2024}
@@ -44,7 +44,7 @@ services:
     container_name: parque_frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "81:80"
     depends_on:
       - backend
     networks:

@@ -1,0 +1,260 @@
+import { useState, useEffect } from 'react'
+import { X, Save } from 'lucide-react'
+import { busesApi } from '../../api'
+
+interface BusModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: () => void
+  busToEdit?: any
+  marcas: any[]
+  tiposCarroceria: any[]
+  marcasCarroceria: any[]
+}
+
+export default function BusModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  busToEdit,
+  marcas,
+  tiposCarroceria,
+  marcasCarroceria
+}: BusModalProps) {
+  const [formData, setFormData] = useState({
+    rua: '',
+    numero_chassis: '',
+    año: new Date().getFullYear(),
+    numero_orden: '',
+    id_marca: '',
+    id_tipo_carroceria: '',
+    id_marca_carroceria: '',
+    capacidad_pasajeros: '',
+    combustible: 'DIESEL',
+    color: '',
+    estado_bus: 'ACTIVO'
+  })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (busToEdit) {
+      setFormData({
+        rua: busToEdit.rua || '',
+        numero_chassis: busToEdit.numero_chassis || '',
+        año: busToEdit.año || new Date().getFullYear(),
+        numero_orden: busToEdit.numero_orden || '',
+        id_marca: busToEdit.id_marca ? String(busToEdit.id_marca) : '',
+        id_tipo_carroceria: busToEdit.id_tipo_carroceria ? String(busToEdit.id_tipo_carroceria) : '',
+        id_marca_carroceria: busToEdit.id_marca_carroceria ? String(busToEdit.id_marca_carroceria) : '',
+        capacidad_pasajeros: busToEdit.capacidad_pasajeros || '',
+        combustible: busToEdit.combustible || 'DIESEL',
+        color: busToEdit.color || '',
+        estado_bus: busToEdit.estado_bus || 'ACTIVO'
+      })
+    } else {
+      setFormData({
+        rua: '',
+        numero_chassis: '',
+        año: new Date().getFullYear(),
+        numero_orden: '',
+        id_marca: marcas[0]?.id_marca ? String(marcas[0].id_marca) : '',
+        id_tipo_carroceria: tiposCarroceria[0]?.id_tipo ? String(tiposCarroceria[0].id_tipo) : '',
+        id_marca_carroceria: marcasCarroceria[0]?.id_marca_carroceria ? String(marcasCarroceria[0].id_marca_carroceria) : '',
+        capacidad_pasajeros: '',
+        combustible: 'DIESEL',
+        color: '',
+        estado_bus: 'ACTIVO'
+      })
+    }
+    setError('')
+  }, [busToEdit, isOpen, marcas, tiposCarroceria, marcasCarroceria])
+
+  if (!isOpen) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+
+    const payload = {
+      rua: formData.rua,
+      numero_chassis: formData.numero_chassis,
+      año: Number(formData.año),
+      numero_orden: formData.numero_orden ? Number(formData.numero_orden) : null,
+      id_marca: formData.id_marca ? Number(formData.id_marca) : null,
+      id_tipo_carroceria: formData.id_tipo_carroceria ? Number(formData.id_tipo_carroceria) : null,
+      id_marca_carroceria: formData.id_marca_carroceria ? Number(formData.id_marca_carroceria) : null,
+      capacidad_pasajeros: formData.capacidad_pasajeros ? Number(formData.capacidad_pasajeros) : null,
+      combustible: formData.combustible,
+      color: formData.color,
+      estado_bus: formData.estado_bus
+    }
+
+    try {
+      if (busToEdit) {
+        await busesApi.actualizar(busToEdit.id_bus, payload)
+      } else {
+        await busesApi.crear(payload)
+      }
+      onSuccess()
+      onClose()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al guardar la información del vehículo.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" style={{
+      position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)'
+    }}>
+      <div className="modal-content card" style={{ width: '100%', maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0 }}>
+            {busToEdit ? 'Editar Vehículo' : 'Registrar Nuevo Bus'}
+          </h3>
+          <button className="btn-icon btn" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {error && (
+          <div style={{ padding: '0.75rem 1rem', borderRadius: '8px', backgroundColor: '#FEE2E2', color: '#991B1B', marginBottom: '1rem', fontSize: '0.875rem' }}>
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div>
+            <label className="form-label">RUA / Matrícula *</label>
+            <input
+              type="text"
+              className="form-input"
+              required
+              value={formData.rua}
+              onChange={e => setFormData({ ...formData, rua: e.target.value.toUpperCase() })}
+              placeholder="ej. ABC 123"
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Número de Chasis *</label>
+            <input
+              type="text"
+              className="form-input"
+              required
+              value={formData.numero_chassis}
+              onChange={e => setFormData({ ...formData, numero_chassis: e.target.value.toUpperCase() })}
+              placeholder="Chasis vin/nro"
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Año de Fabricación *</label>
+            <input
+              type="number"
+              className="form-input"
+              required
+              value={formData.año}
+              onChange={e => setFormData({ ...formData, año: Number(e.target.value) })}
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Número de Orden</label>
+            <input
+              type="number"
+              className="form-input"
+              value={formData.numero_orden}
+              onChange={e => setFormData({ ...formData, numero_orden: e.target.value })}
+              placeholder="N° correlativo"
+            />
+          </div>
+
+          <div>
+            <label className="form-label">Marca Chasis</label>
+            <select
+              className="form-select"
+              value={formData.id_marca}
+              onChange={e => setFormData({ ...formData, id_marca: e.target.value })}
+            >
+              <option value="">-- Seleccionar Marca --</option>
+              {marcas.map(m => (
+                <option key={m.id_marca} value={m.id_marca}>{m.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="form-label">Marca Carrocería</label>
+            <select
+              className="form-select"
+              value={formData.id_marca_carroceria}
+              onChange={e => setFormData({ ...formData, id_marca_carroceria: e.target.value })}
+            >
+              <option value="">-- Seleccionar --</option>
+              {marcasCarroceria.map(m => (
+                <option key={m.id_marca_carroceria} value={m.id_marca_carroceria}>{m.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="form-label">Tipo Carrocería</label>
+            <select
+              className="form-select"
+              value={formData.id_tipo_carroceria}
+              onChange={e => setFormData({ ...formData, id_tipo_carroceria: e.target.value })}
+            >
+              <option value="">-- Seleccionar Tipo --</option>
+              {tiposCarroceria.map(t => (
+                <option key={t.id_tipo} value={t.id_tipo}>{t.descripcion}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="form-label">Combustible</label>
+            <select
+              className="form-select"
+              value={formData.combustible}
+              onChange={e => setFormData({ ...formData, combustible: e.target.value })}
+            >
+              <option value="DIESEL">DIESEL</option>
+              <option value="ELECTRICO">ELÉCTRICO</option>
+              <option value="HIBRIDO">HÍBRIDO</option>
+              <option value="NAFTA">NAFTA</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="form-label">Estado Bus</label>
+            <select
+              className="form-select"
+              value={formData.estado_bus}
+              onChange={e => setFormData({ ...formData, estado_bus: e.target.value })}
+            >
+              <option value="ACTIVO">ACTIVO</option>
+              <option value="INACTIVO">INACTIVO</option>
+              <option value="EN_MANTENIMIENTO">EN MANTENIMIENTO</option>
+              <option value="BAJA">BAJA</option>
+            </select>
+          </div>
+
+          <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
+              Cancelar
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              <Save size={16} />
+              <span>{loading ? 'Guardando...' : 'Guardar Bus'}</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

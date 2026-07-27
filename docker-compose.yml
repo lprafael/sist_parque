@@ -1,0 +1,55 @@
+services:
+  # ── Backend FastAPI ──────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: parque_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=${DB_HOST:-168.90.177.232}
+      - DB_PORT=${DB_PORT:-2024}
+      - DB_USER=${DB_USER:-cid_admin_user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-bbdd-monitoreo-cid}
+      - DB_SCHEMA=registro_habilitacion
+      - DB_SSL=false
+      - SECRET_KEY=${SECRET_KEY}
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_FROM_NAME=Sistema Parque Automotor VMT
+      - ALERT_SCHEDULE_HOUR=${ALERT_SCHEDULE_HOUR:-7}
+      - ALERT_SCHEDULE_MINUTE=${ALERT_SCHEDULE_MINUTE:-0}
+    networks:
+      - parque_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Frontend React ───────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: parque_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - parque_net
+
+networks:
+  parque_net:
+    driver: bridge

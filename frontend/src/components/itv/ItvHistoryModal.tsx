@@ -21,7 +21,23 @@ export default function ItvHistoryModal({
 
   if (!isOpen) return null
 
-  const historyItems = data?.data ?? []
+  const rawItems = data?.data ?? []
+  // Deduplicar registros idénticos por combinación de fechas para evitar duplicados en la vista
+  const historyItems = rawItems.filter((item: any, index: number, self: any[]) =>
+    index === self.findIndex((t: any) => (
+      t.fecha_vencimiento_anterior === item.fecha_vencimiento_anterior &&
+      t.fecha_itv_actual === item.fecha_itv_actual &&
+      t.fecha_vencimiento_actual === item.fecha_vencimiento_actual
+    ))
+  )
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'N/A'
+    const cleanStr = String(dateStr).split('T')[0]
+    const parts = cleanStr.split('-')
+    if (parts.length !== 3) return dateStr
+    return `${Number(parts[2])}/${Number(parts[1])}/${parts[0]}`
+  }
 
   return (
     <div className="modal-overlay">
@@ -61,13 +77,13 @@ export default function ItvHistoryModal({
                         {new Date(item.fecha_registro).toLocaleString('es-PY')}
                       </td>
                       <td style={{ opacity: 0.8 }}>
-                        {item.fecha_vencimiento_anterior ? new Date(item.fecha_vencimiento_anterior).toLocaleDateString('es-PY') : 'N/A'}
+                        {formatDate(item.fecha_vencimiento_anterior)}
                       </td>
                       <td style={{ fontWeight: 600 }}>
-                        {item.fecha_itv_actual ? new Date(item.fecha_itv_actual).toLocaleDateString('es-PY') : 'N/A'}
+                        {formatDate(item.fecha_itv_actual)}
                       </td>
                       <td style={{ fontWeight: 600 }}>
-                        {item.fecha_vencimiento_actual ? new Date(item.fecha_vencimiento_actual).toLocaleDateString('es-PY') : 'N/A'}
+                        {formatDate(item.fecha_vencimiento_actual)}
                       </td>
                       <td>
                         <span className={`badge ${item.diferencia_dias > 0 ? 'badge-vigente' : 'badge-vencido'}`}>

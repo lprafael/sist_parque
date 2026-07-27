@@ -11,7 +11,7 @@ export default function EmpresasPage() {
   const { data, isLoading } = useQuery<{ data: { items: any[]; total: number } }>({
     queryKey: ['empresas', page, search],
     queryFn: () => empresasApi.listar({
-      page, page_size: PAGE_SIZE, solo_activas: true,
+      page, page_size: PAGE_SIZE, solo_activas: true, solo_permisionarias: true,
       ...(search && { search }),
     }),
   })
@@ -25,7 +25,7 @@ export default function EmpresasPage() {
         <div>
           <h1 className="page-header-title">Empresas Operadoras</h1>
           <p className="page-header-sub">
-            {total} empresas activas (fuente: sistema CID — solo lectura)
+            {total} empresas permisionarias activas (fuente: sistema CID — solo lectura)
           </p>
         </div>
         <div style={{

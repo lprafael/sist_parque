@@ -28,6 +28,7 @@ async def listar_empresas(
     page_size: int = Query(50, ge=1, le=200),
     search: Optional[str] = None,
     solo_activas: bool = True,
+    solo_permisionarias: Optional[bool] = Query(None, description="Filtrar empresas permisionarias (true/false)"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
@@ -41,6 +42,8 @@ async def listar_empresas(
         filters.append(Eot.eot_nombre.ilike(f"%{search}%"))
     if solo_activas:
         filters.append(Eot.situacion == 1)   # 1 = activa en el CID
+    if solo_permisionarias is not None:
+        filters.append(Eot.permisionario == solo_permisionarias)
     if filters:
         q = q.where(and_(*filters))
 

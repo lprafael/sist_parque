@@ -85,20 +85,32 @@ async def registrar_itv(
     if not bus:
         raise HTTPException(status_code=404, detail="Bus no encontrado")
 
-    # Guardar ITV anterior en historial
+    # Guardar ITV anterior en historial (evitando duplicados idénticos)
     itv_ant = (await db.execute(
         select(ItvBus).where(ItvBus.id_bus == body.id_bus).order_by(ItvBus.fecha_vencimiento.desc()).limit(1)
     )).scalar_one_or_none()
 
     if itv_ant:
         diff = (body.fecha_vencimiento - itv_ant.fecha_vencimiento).days
-        db.add(HistorialItv(
-            id_bus=body.id_bus,
-            fecha_vencimiento_anterior=itv_ant.fecha_vencimiento,
-            fecha_itv_actual=body.fecha_itv,
-            fecha_vencimiento_actual=body.fecha_vencimiento,
-            diferencia_dias=diff
-        ))
+        hist_dup = (await db.execute(
+            select(HistorialItv).where(
+                and_(
+                    HistorialItv.id_bus == body.id_bus,
+                    HistorialItv.fecha_vencimiento_anterior == itv_ant.fecha_vencimiento,
+                    HistorialItv.fecha_itv_actual == body.fecha_itv,
+                    HistorialItv.fecha_vencimiento_actual == body.fecha_vencimiento
+                )
+            )
+        )).scalar_one_or_none()
+
+        if not hist_dup:
+            db.add(HistorialItv(
+                id_bus=body.id_bus,
+                fecha_vencimiento_anterior=itv_ant.fecha_vencimiento,
+                fecha_itv_actual=body.fecha_itv,
+                fecha_vencimiento_actual=body.fecha_vencimiento,
+                diferencia_dias=diff
+            ))
 
     itv = ItvBus(**body.model_dump())
     db.add(itv)

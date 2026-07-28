@@ -1,17 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
-import { X, Calendar } from 'lucide-react'
+import { X, Calendar, Edit2 } from 'lucide-react'
 import { itvApi } from '../../api'
 
 interface ItvHistoryModalProps {
   isOpen: boolean
   onClose: () => void
   busId: number
+  busRua?: string
+  onEditItv?: (busId: number) => void
 }
 
 export default function ItvHistoryModal({
   isOpen,
   onClose,
-  busId
+  busId,
+  busRua,
+  onEditItv
 }: ItvHistoryModalProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['itv-history', busId],
@@ -41,12 +45,25 @@ export default function ItvHistoryModal({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content" style={{ maxWidth: '700px' }}>
+      <div className="modal-content" style={{ maxWidth: '750px' }}>
         <div className="modal-header">
-          <h2 className="modal-title">Historial de ITV - Bus #{busId}</h2>
-          <button className="modal-close" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <h2 className="modal-title">
+            Historial de ITV {busRua ? `— Bus ${busRua}` : `— Bus #${busId}`}
+          </h2>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onEditItv && (
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+                onClick={() => onEditItv(busId)}
+              >
+                <Edit2 size={13} /> Editar / Registrar ITV
+              </button>
+            )}
+            <button className="modal-close" onClick={onClose}>
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="modal-body" style={{ maxHeight: '60vh', overflowY: 'auto' }}>

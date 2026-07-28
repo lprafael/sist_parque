@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { busesApi, empresasApi } from '../api'
-import { Search, Plus, RefreshCw, Edit2, X, Building2 } from 'lucide-react'
+import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock } from 'lucide-react'
 import BusModal from '../components/buses/BusModal'
+import ItvHistoryModal from '../components/itv/ItvHistoryModal'
+import ItvModal from '../components/itv/ItvModal'
 
 function estadoBadge(estado: string) {
   const map: Record<string, string> = {
@@ -32,6 +34,13 @@ export default function BusesPage() {
   const [empresa, setEmpresa]         = useState(empresaParam)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [busToEdit, setBusToEdit]     = useState<any>(null)
+
+  // Modales ITV
+  const [isHistoryOpen, setIsHistoryOpen]                 = useState(false)
+  const [selectedBusForHistory, setSelectedBusForHistory] = useState<any>(null)
+  const [isItvModalOpen, setIsItvModalOpen]               = useState(false)
+  const [itvToEdit, setItvToEdit]                         = useState<any>(null)
+
   const PAGE_SIZE = 25
 
   // Sincronizar parámetro URL si cambia externamente
@@ -86,6 +95,16 @@ export default function BusesPage() {
   const handleOpenEdit = (bus: any) => {
     setBusToEdit(bus)
     setIsModalOpen(true)
+  }
+
+  const handleOpenHistory = (bus: any) => {
+    setSelectedBusForHistory(bus)
+    setIsHistoryOpen(true)
+  }
+
+  const handleOpenEditItv = (busId: number) => {
+    setItvToEdit({ id_bus: busId })
+    setIsItvModalOpen(true)
   }
 
   // Nombre de la empresa seleccionada si está filtrando
@@ -239,14 +258,34 @@ export default function BusesPage() {
                           {bus.estado_bus}
                         </span>
                       </td>
-                      <td>
-                        <button
-                          className="btn btn-secondary btn-sm btn-icon"
-                          onClick={() => handleOpenEdit(bus)}
-                          title="Editar bus"
-                        >
-                          <Edit2 size={14} />
-                        </button>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.75rem',
+                              padding: '4px 8px',
+                              color: '#82b1ff',
+                              borderColor: 'rgba(33,150,243,0.3)',
+                              background: 'rgba(33,150,243,0.08)'
+                            }}
+                            onClick={() => handleOpenHistory(bus)}
+                            title="Ver histórico de ITV de este bus"
+                          >
+                            <Clock size={13} /> Ver hist. ITV
+                          </button>
+
+                          <button
+                            className="btn btn-secondary btn-sm btn-icon"
+                            onClick={() => handleOpenEdit(bus)}
+                            title="Editar bus"
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -281,6 +320,24 @@ export default function BusesPage() {
         marcas={marcasData?.data ?? []}
         tiposCarroceria={tiposData?.data ?? []}
         marcasCarroceria={marcasCarrData?.data ?? []}
+      />
+
+      <ItvHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        busId={selectedBusForHistory?.id_bus ?? 0}
+        busRua={selectedBusForHistory?.rua}
+        onEditItv={handleOpenEditItv}
+      />
+
+      <ItvModal
+        isOpen={isItvModalOpen}
+        onClose={() => setIsItvModalOpen(false)}
+        itvToEdit={itvToEdit}
+        onSuccess={() => {
+          setIsItvModalOpen(false)
+          refetch()
+        }}
       />
     </div>
   )

@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
 from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, ItvBus, BusEmpresa, Eot, Auditoria
+from app.schemas import BusCreate, BusUpdate, BusOut
 
 router = APIRouter(prefix="/buses", tags=["Buses"])
 

@@ -63,7 +63,7 @@ export default function EmpresasPage() {
                 padding: '18px',
                 display: 'flex',
                 flexDirection: 'column',
-                justify: 'space-between',
+                justifyContent: 'space-between',
                 transition: 'border-color 0.2s ease, transform 0.2s ease',
               }}
             >
@@ -114,7 +114,7 @@ export default function EmpresasPage() {
                   width: '100%',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center',
+                  justifyContent: 'center',
                   gap: '6px',
                   fontSize: '0.78rem',
                   fontWeight: 600,

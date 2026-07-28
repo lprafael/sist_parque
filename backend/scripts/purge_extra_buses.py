@@ -12,10 +12,9 @@ conn = psycopg2.connect(
 conn.autocommit = True
 cur = conn.cursor()
 
-print("Eliminando referencias en tablas dependientes (alertas, seguros_bus, historial_itv, bus_empresa, etc.)...")
+print("Eliminando referencias en tablas dependientes (alertas, seguros_bus, bus_empresa, etc.)...")
 cur.execute("DELETE FROM registro_habilitacion.alertas WHERE id_bus NOT IN (SELECT id_bus FROM registro_habilitacion.itv_bus);")
 cur.execute("DELETE FROM registro_habilitacion.seguros_bus WHERE id_bus NOT IN (SELECT id_bus FROM registro_habilitacion.itv_bus);")
-cur.execute("DELETE FROM registro_habilitacion.historial_itv WHERE id_bus NOT IN (SELECT id_bus FROM registro_habilitacion.itv_bus);")
 cur.execute("DELETE FROM registro_habilitacion.bus_empresa WHERE id_bus NOT IN (SELECT id_bus FROM registro_habilitacion.itv_bus);")
 
 print("Eliminando buses que no están en la planilla oficial 2026...")

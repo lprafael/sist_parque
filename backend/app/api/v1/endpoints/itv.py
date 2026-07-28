@@ -2,11 +2,11 @@ from datetime import date
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, update
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import ItvBus, HistorialItv, Bus, Auditoria
+from app.models import ItvBus, Bus, Auditoria
 from app.schemas import ItvBusCreate, ItvBusUpdate, ItvBusOut, HistorialItvOut
 
 router = APIRouter(prefix="/itv", tags=["ITV - Inspección Técnica"])
@@ -34,11 +34,14 @@ async def listar_itv(
     id_bus: Optional[int] = None,
     estado: Optional[str] = None,
     vence_antes_de: Optional[date] = None,
+    solo_vigentes: bool = Query(True, description="Si es True, sólo retorna los registros de ITV vigentes"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
     q = select(ItvBus)
     filters = []
+    if solo_vigentes:
+        filters.append(ItvBus.es_vigente == True)
     if id_bus:
         filters.append(ItvBus.id_bus == id_bus)
     if vence_antes_de:
@@ -85,32 +88,13 @@ async def registrar_itv(
     if not bus:
         raise HTTPException(status_code=404, detail="Bus no encontrado")
 
-    # Guardar ITV anterior en historial (evitando duplicados idénticos)
-    itv_ant = (await db.execute(
-        select(ItvBus).where(ItvBus.id_bus == body.id_bus).order_by(ItvBus.fecha_vencimiento.desc()).limit(1)
-    )).scalar_one_or_none()
-
-    if itv_ant:
-        diff = (body.fecha_vencimiento - itv_ant.fecha_vencimiento).days
-        hist_dup = (await db.execute(
-            select(HistorialItv).where(
-                and_(
-                    HistorialItv.id_bus == body.id_bus,
-                    HistorialItv.fecha_vencimiento_anterior == itv_ant.fecha_vencimiento,
-                    HistorialItv.fecha_itv_actual == body.fecha_itv,
-                    HistorialItv.fecha_vencimiento_actual == body.fecha_vencimiento
-                )
-            )
-        )).scalar_one_or_none()
-
-        if not hist_dup:
-            db.add(HistorialItv(
-                id_bus=body.id_bus,
-                fecha_vencimiento_anterior=itv_ant.fecha_vencimiento,
-                fecha_itv_actual=body.fecha_itv,
-                fecha_vencimiento_actual=body.fecha_vencimiento,
-                diferencia_dias=diff
-            ))
+    # Si se registra una ITV marcada como vigente (default True), marcar las ITVs previas de ese bus como no vigentes
+    if body.es_vigente:
+        await db.execute(
+            update(ItvBus)
+            .where(ItvBus.id_bus == body.id_bus)
+            .values(es_vigente=False)
+        )
 
     itv = ItvBus(**body.model_dump())
     db.add(itv)
@@ -134,6 +118,15 @@ async def actualizar_itv(
         raise HTTPException(status_code=404, detail="Registro ITV no encontrado")
 
     update_data = body.model_dump(exclude_unset=True)
+
+    # Si se actualiza es_vigente a True, asegurar que otras ITVs del bus pasen a False
+    if update_data.get("es_vigente") is True:
+        await db.execute(
+            update(ItvBus)
+            .where(and_(ItvBus.id_bus == itv.id_bus, ItvBus.id_itv != id_itv))
+            .values(es_vigente=False)
+        )
+
     for k, v in update_data.items():
         setattr(itv, k, v)
     await db.commit()
@@ -144,7 +137,28 @@ async def actualizar_itv(
 
 @router.get("/historial/{id_bus}", response_model=list[HistorialItvOut])
 async def historial_itv_bus(id_bus: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    hist = (await db.execute(
-        select(HistorialItv).where(HistorialItv.id_bus == id_bus).order_by(HistorialItv.fecha_registro.desc())
+    # Obtener todas las ITVs históricas del bus ordenadas cronológicamente por fecha de vencimiento
+    records = (await db.execute(
+        select(ItvBus)
+        .where(ItvBus.id_bus == id_bus)
+        .order_by(ItvBus.fecha_vencimiento.asc())
     )).scalars().all()
-    return hist
+
+    historial = []
+    for idx, rec in enumerate(records):
+        prev_venc = records[idx - 1].fecha_vencimiento if idx > 0 else None
+        diff_days = (rec.fecha_vencimiento - prev_venc).days if prev_venc else None
+
+        historial.append(HistorialItvOut(
+            id_historial=rec.id_itv,
+            id_bus=rec.id_bus,
+            fecha_vencimiento_anterior=prev_venc,
+            fecha_itv_actual=rec.fecha_itv,
+            fecha_vencimiento_actual=rec.fecha_vencimiento,
+            diferencia_dias=diff_days,
+            observaciones=rec.observaciones,
+            fecha_registro=rec.fecha_registro
+        ))
+
+    # Devolver orden descendente para mostrar lo más reciente primero
+    return list(reversed(historial))

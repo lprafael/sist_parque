@@ -51,10 +51,9 @@ def main():
     conn.autocommit = True
     cur = conn.cursor()
 
-    print("Limpiando itv_bus, seguros_bus e historial_itv antes de importar...")
+    print("Limpiando itv_bus y seguros_bus antes de importar...")
     cur.execute(f"DELETE FROM {SCHEMA}.itv_bus;")
     cur.execute(f"DELETE FROM {SCHEMA}.seguros_bus;")
-    cur.execute(f"DELETE FROM {SCHEMA}.historial_itv;")
 
     stats = {"buses_updated": 0, "buses_created": 0, "itv": 0, "seguros": 0, "errors": 0}
 
@@ -126,22 +125,25 @@ def main():
             if venc_itv and id_bus:
                 sit_str = str(sit_itv).strip()[:20] if sit_itv else None
                 obs_str = str(observacion).strip() if observacion else None
-                cur.execute(f"""
-                    INSERT INTO {SCHEMA}.itv_bus
-                        (id_bus, fecha_itv, fecha_vencimiento, resultado_itv, observaciones)
-                    VALUES (%s,%s,%s,%s,%s)
-                """, (id_bus, fecha_itv or venc_itv, venc_itv, sit_str, obs_str))
-                stats["itv"] += 1
 
+                # Si hay una ITV anterior registrada en el Excel, la guardamos como registro histórico (es_vigente = False)
                 if itv_ant:
                     try:
                         cur.execute(f"""
-                            INSERT INTO {SCHEMA}.historial_itv
-                                (id_bus, fecha_vencimiento_anterior, fecha_itv_actual, fecha_vencimiento_actual)
-                            VALUES (%s,%s,%s,%s)
-                        """, (id_bus, itv_ant, fecha_itv or venc_itv, venc_itv))
+                            INSERT INTO {SCHEMA}.itv_bus
+                                (id_bus, fecha_itv, fecha_vencimiento, resultado_itv, observaciones, es_vigente)
+                            VALUES (%s,%s,%s,%s,%s,FALSE)
+                        """, (id_bus, itv_ant, itv_ant, sit_str, "Registro de ITV anterior importado",))
                     except Exception:
                         pass
+
+                # ITV Actual/Vigente (es_vigente = True)
+                cur.execute(f"""
+                    INSERT INTO {SCHEMA}.itv_bus
+                        (id_bus, fecha_itv, fecha_vencimiento, resultado_itv, observaciones, es_vigente)
+                    VALUES (%s,%s,%s,%s,%s,TRUE)
+                """, (id_bus, fecha_itv or venc_itv, venc_itv, sit_str, obs_str))
+                stats["itv"] += 1
 
             # 4. Seguros
             if id_bus:

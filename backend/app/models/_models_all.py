@@ -88,7 +88,6 @@ class Bus(Base):
     marca_carroceria = relationship("MarcaCarroceria", back_populates="buses")
     asignaciones    = relationship("BusEmpresa", back_populates="bus")
     itv_registros   = relationship("ItvBus", back_populates="bus")
-    historial_itv   = relationship("HistorialItv", back_populates="bus")
     seguros         = relationship("SeguroBus", back_populates="bus")
     documentos      = relationship("DocumentoBus", back_populates="bus")
     alertas         = relationship("Alerta", back_populates="bus")
@@ -113,7 +112,7 @@ class BusEmpresa(Base):
 
 
 class ItvBus(Base):
-    """Inspección Técnica Vehicular — registro actual."""
+    """Inspección Técnica Vehicular (historial unificado, con indicador de vigencia)."""
     __tablename__ = "itv_bus"
     __table_args__ = {"schema": SCHEMA}
 
@@ -126,26 +125,10 @@ class ItvBus(Base):
     numero_certificado      = Column(String(100))
     observaciones           = Column(Text)
     archivo_certificado_url = Column(String(500))
+    es_vigente              = Column(Boolean, default=True, nullable=False, index=True)
     fecha_registro          = Column(DateTime, default=func.now())
 
     bus = relationship("Bus", back_populates="itv_registros")
-
-
-class HistorialItv(Base):
-    """Historial de cambios de ITV (diferencias entre períodos)."""
-    __tablename__ = "historial_itv"
-    __table_args__ = {"schema": SCHEMA}
-
-    id_historial                = Column(Integer, primary_key=True, index=True)
-    id_bus                      = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"))
-    fecha_vencimiento_anterior  = Column(Date)
-    fecha_itv_actual            = Column(Date)
-    fecha_vencimiento_actual    = Column(Date)
-    diferencia_dias             = Column(Integer)
-    observaciones               = Column(Text)
-    fecha_registro              = Column(DateTime, default=func.now())
-
-    bus = relationship("Bus", back_populates="historial_itv")
 
 
 class CompaniaSeguro(Base):

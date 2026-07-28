@@ -253,20 +253,19 @@
   </header>
 
   <div class="tab-bar">
-    <button className="tab-btn active" onclick="switchTab('diagram')">Diagrama ER Visual</button>
-    <button className="tab-btn" onclick="switchTab('dictionary')">Diccionario de Datos (Tablas)</button>
+    <button class="tab-btn active" onclick="switchTab(event, 'diagram')">Diagrama ER Visual</button>
+    <button class="tab-btn" onclick="switchTab(event, 'dictionary')">Diccionario de Datos (Tablas)</button>
   </div>
 
   <!-- SECCIÓN 1: DIAGRAMA VISUAL MERMAID -->
-  <div id="diagram" className="content-section active">
-    <div className="diagram-card">
-      <div className="mermaid">
+  <div id="diagram" class="content-section active">
+    <div class="diagram-card">
+      <div class="mermaid">
 erDiagram
 
     %% RELACIONES DENTRO DEL ESQUEMA
     buses ||--o{ bus_empresa : "posee asignaciones"
     buses ||--o{ itv_bus : "registra inspecciones"
-    buses ||--o{ historial_itv : "audita cambios"
     buses ||--o{ seguros_bus : "posee pólizas"
     buses ||--o{ documentos_bus : "posee documentos"
     buses ||--o{ alertas : "genera alertas"
@@ -322,14 +321,7 @@ erDiagram
         date fecha_vencimiento
         string resultado_itv
         string numero_certificado
-    }
-
-    historial_itv {
-        int id_historial PK
-        int id_bus FK
-        date fecha_vencimiento_anterior
-        date fecha_vencimiento_actual
-        int diferencia_dias
+        boolean es_vigente UK "Único por bus si es TRUE"
     }
 
     companias_seguros {
@@ -382,26 +374,26 @@ erDiagram
   </div>
 
   <!-- SECCIÓN 2: DICCIONARIO DE DATOS DETALLADO -->
-  <div id="dictionary" className="content-section">
-    <div className="tables-grid">
+  <div id="dictionary" class="content-section">
+    <div class="tables-grid">
 
       <!-- Tabla: buses -->
-      <div className="table-card">
-        <div className="table-header">
-          <span className="table-name">buses</span>
-          <span className="badge-schema">Tabla Principal</span>
+      <div class="table-card">
+        <div class="table-header">
+          <span class="table-name">buses</span>
+          <span class="badge-schema">Tabla Principal</span>
         </div>
-        <p className="table-desc">Registro central del parque automotor de colectivos.</p>
-        <table className="fields-table">
+        <p class="table-desc">Registro central del parque automotor de colectivos.</p>
+        <table class="fields-table">
           <thead>
             <tr><th>Campo</th><th>Tipo</th><th>Clave</th></tr>
           </thead>
           <tbody>
-            <tr><td>id_bus</td><td className="type-tag">Integer</td><td><span className="key-badge key-pk">PK</span></td></tr>
+            <tr><td>id_bus</td><td class="type-tag">Integer</td><td><span class="key-badge key-pk">PK</span></td></tr>
             <tr><td>numero_orden</td><td className="type-tag">Integer</td><td>—</td></tr>
-            <tr><td>rua</td><td className="type-tag">String(20)</td><td><span className="key-badge key-uk">UK</span></td></tr>
-            <tr><td>numero_chassis</td><td className="type-tag">String(50)</td><td><span className="key-badge key-uk">UK</span></td></tr>
-            <tr><td>id_marca</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
+            <tr><td>rua</td><td className="type-tag">String(20)</td><td><span class="key-badge key-uk">UK</span></td></tr>
+            <tr><td>numero_chassis</td><td className="type-tag">String(50)</td><td><span class="key-badge key-uk">UK</span></td></tr>
+            <tr><td>id_marca</td><td className="type-tag">Integer</td><td><span class="key-badge key-fk">FK</span></td></tr>
             <tr><td>id_tipo_carroceria</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
             <tr><td>id_marca_carroceria</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
             <tr><td>año</td><td className="type-tag">Integer</td><td>—</td></tr>
@@ -411,66 +403,45 @@ erDiagram
       </div>
 
       <!-- Tabla: bus_empresa -->
-      <div className="table-card">
-        <div className="table-header">
-          <span className="table-name">bus_empresa</span>
-          <span className="badge-schema">Asignación</span>
+      <div class="table-card">
+        <div class="table-header">
+          <span class="table-name">bus_empresa</span>
+          <span class="badge-schema">Asignación</span>
         </div>
-        <p className="table-desc">Historial de asignaciones de colectivos a Empresas Operadoras (EOTs).</p>
-        <table className="fields-table">
+        <p class="table-desc">Historial de asignaciones de colectivos a Empresas Operadoras (EOTs).</p>
+        <table class="fields-table">
           <thead>
             <tr><th>Campo</th><th>Tipo</th><th>Clave</th></tr>
           </thead>
           <tbody>
-            <tr><td>id_asignacion</td><td className="type-tag">Integer</td><td><span className="key-badge key-pk">PK</span></td></tr>
-            <tr><td>id_bus</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
-            <tr><td>id_eot</td><td className="type-tag">String(255)</td><td><span className="key-badge key-fk">FK</span> (public.eots)</td></tr>
-            <tr><td>fecha_asignacion</td><td className="type-tag">Date</td><td>—</td></tr>
-            <tr><td>estado_asignacion</td><td className="type-tag">String(20)</td><td>—</td></tr>
+            <tr><td>id_asignacion</td><td class="type-tag">Integer</td><td><span class="key-badge key-pk">PK</span></td></tr>
+            <tr><td>id_bus</td><td class="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
+            <tr><td>id_eot</td><td class="type-tag">String(255)</td><td><span class="key-badge key-fk">FK</span> (public.eots)</td></tr>
+            <tr><td>fecha_asignacion</td><td class="type-tag">Date</td><td>—</td></tr>
+            <tr><td>estado_asignacion</td><td class="type-tag">String(20)</td><td>—</td></tr>
           </tbody>
         </table>
       </div>
 
       <!-- Tabla: itv_bus -->
-      <div className="table-card">
-        <div className="table-header">
-          <span className="table-name">itv_bus</span>
-          <span className="badge-schema">Inspección</span>
+      <div class="table-card">
+        <div class="table-header">
+          <span class="table-name">itv_bus</span>
+          <span class="badge-schema">Inspección</span>
         </div>
-        <p className="table-desc">Registro actual de Inspección Técnica Vehicular de cada bus.</p>
-        <table className="fields-table">
+        <p class="table-desc">Histórico unificado de Inspección Técnica Vehicular de cada bus (con control de vigencia mediante índice único parcial).</p>
+        <table class="fields-table">
           <thead>
             <tr><th>Campo</th><th>Tipo</th><th>Clave</th></tr>
           </thead>
           <tbody>
-            <tr><td>id_itv</td><td className="type-tag">Integer</td><td><span className="key-badge key-pk">PK</span></td></tr>
-            <tr><td>id_bus</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
-            <tr><td>fecha_itv</td><td className="type-tag">Date</td><td>—</td></tr>
-            <tr><td>fecha_vencimiento</td><td className="type-tag">Date</td><td>—</td></tr>
-            <tr><td>resultado_itv</td><td className="type-tag">String(20)</td><td>—</td></tr>
-            <tr><td>numero_certificado</td><td className="type-tag">String(100)</td><td>—</td></tr>
-          </tbody>
-        </table>
-      </div>
-
-      <!-- Tabla: historial_itv -->
-      <div className="table-card">
-        <div className="table-header">
-          <span className="table-name">historial_itv</span>
-          <span className="badge-schema">Histórico</span>
-        </div>
-        <p className="table-desc">Trazabilidad de renovaciones y cálculo de diferencias en días de ITV.</p>
-        <table className="fields-table">
-          <thead>
-            <tr><th>Campo</th><th>Tipo</th><th>Clave</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>id_historial</td><td className="type-tag">Integer</td><td><span className="key-badge key-pk">PK</span></td></tr>
-            <tr><td>id_bus</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
-            <tr><td>fecha_vencimiento_anterior</td><td className="type-tag">Date</td><td>—</td></tr>
-            <tr><td>fecha_itv_actual</td><td className="type-tag">Date</td><td>—</td></tr>
-            <tr><td>fecha_vencimiento_actual</td><td className="type-tag">Date</td><td>—</td></tr>
-            <tr><td>diferencia_dias</td><td className="type-tag">Integer</td><td>—</td></tr>
+            <tr><td>id_itv</td><td class="type-tag">Integer</td><td><span class="key-badge key-pk">PK</span></td></tr>
+            <tr><td>id_bus</td><td class="type-tag">Integer</td><td><span class="key-badge key-fk">FK</span></td></tr>
+            <tr><td>fecha_itv</td><td class="type-tag">Date</td><td>—</td></tr>
+            <tr><td>fecha_vencimiento</td><td class="type-tag">Date</td><td>—</td></tr>
+            <tr><td>resultado_itv</td><td class="type-tag">String(20)</td><td>—</td></tr>
+            <tr><td>numero_certificado</td><td class="type-tag">String(100)</td><td>—</td></tr>
+            <tr><td>es_vigente</td><td class="type-tag">Boolean</td><td><span class="key-badge key-uk" title="Único por bus donde es_vigente = TRUE">UK Parcial</span></td></tr>
           </tbody>
         </table>
       </div>
@@ -479,20 +450,20 @@ erDiagram
       <div className="table-card">
         <div className="table-header">
           <span className="table-name">seguros_bus</span>
-          <span className="badge-schema">Pólizas</span>
+          <span class="badge-schema">Pólizas</span>
         </div>
         <p className="table-desc">Pólizas de seguro contratadas (Pasajeros y Terceros).</p>
-        <table className="fields-table">
+        <table class="fields-table">
           <thead>
             <tr><th>Campo</th><th>Tipo</th><th>Clave</th></tr>
           </thead>
           <tbody>
-            <tr><td>id_seguro</td><td className="type-tag">Integer</td><td><span className="key-badge key-pk">PK</span></td></tr>
-            <tr><td>id_bus</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
-            <tr><td>id_compania</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
-            <tr><td>tipo_seguro</td><td className="type-tag">String(50)</td><td>—</td></tr>
-            <tr><td>numero_poliza</td><td className="type-tag">String(100)</td><td>—</td></tr>
-            <tr><td>fecha_vencimiento</td><td className="type-tag">Date</td><td>—</td></tr>
+            <tr><td>id_seguro</td><td class="type-tag">Integer</td><td><span class="key-badge key-pk">PK</span></td></tr>
+            <tr><td>id_bus</td><td class="type-tag">Integer</td><td><span class="key-badge key-fk">FK</span></td></tr>
+            <tr><td>id_compania</td><td class="type-tag">Integer</td><td><span class="key-badge key-fk">FK</span></td></tr>
+            <tr><td>tipo_seguro</td><td class="type-tag">String(50)</td><td>—</td></tr>
+            <tr><td>numero_poliza</td><td class="type-tag">String(100)</td><td>—</td></tr>
+            <tr><td>fecha_vencimiento</td><td class="type-tag">Date</td><td>—</td></tr>
           </tbody>
         </table>
       </div>
@@ -501,7 +472,7 @@ erDiagram
       <div className="table-card">
         <div className="table-header">
           <span className="table-name">alertas</span>
-          <span className="badge-schema">Notificaciones</span>
+          <span class="badge-schema">Notificaciones</span>
         </div>
         <p className="table-desc">Alertas automáticas de vencimiento (ITV, Seguros, Documentos).</p>
         <table className="fields-table">
@@ -509,11 +480,11 @@ erDiagram
             <tr><th>Campo</th><th>Tipo</th><th>Clave</th></tr>
           </thead>
           <tbody>
-            <tr><td>id_alerta</td><td className="type-tag">Integer</td><td><span className="key-badge key-pk">PK</span></td></tr>
-            <tr><td>id_bus</td><td className="type-tag">Integer</td><td><span className="key-badge key-fk">FK</span></td></tr>
-            <tr><td>tipo_alerta</td><td className="type-tag">String(50)</td><td>—</td></tr>
-            <tr><td>prioridad</td><td className="type-tag">String(20)</td><td>—</td></tr>
-            <tr><td>estado_alerta</td><td className="type-tag">String(20)</td><td>—</td></tr>
+            <tr><td>id_alerta</td><td class="type-tag">Integer</td><td><span class="key-badge key-pk">PK</span></td></tr>
+            <tr><td>id_bus</td><td className="type-tag">Integer</td><td><span class="key-badge key-fk">FK</span></td></tr>
+            <tr><td>tipo_alerta</td><td class="type-tag">String(50)</td><td>—</td></tr>
+            <tr><td>prioridad</td><td class="type-tag">String(20)</td><td>—</td></tr>
+            <tr><td>estado_alerta</td><td class="type-tag">String(20)</td><td>—</td></tr>
           </tbody>
         </table>
       </div>
@@ -532,12 +503,17 @@ erDiagram
       }
     });
 
-    function switchTab(tabId) {
+    function switchTab(evt, tabId) {
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelectorAll('.content-section').forEach(sec => sec.classList.remove('active'));
 
-      event.target.classList.add('active');
-      document.getElementById(tabId).classList.add('active');
+      if (evt && evt.currentTarget) {
+        evt.currentTarget.classList.add('active');
+      }
+      const targetSec = document.getElementById(tabId);
+      if (targetSec) {
+        targetSec.classList.add('active');
+      }
     }
   </script>
 </body>

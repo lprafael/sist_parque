@@ -33,7 +33,7 @@ async def generar_alertas():
             itv_q = await db.execute(
                 select(ItvBus, Bus.rua, Bus.numero_orden)
                 .join(Bus, Bus.id_bus == ItvBus.id_bus)
-                .where(ItvBus.fecha_vencimiento <= hoy + timedelta(days=settings.ALERT_DAYS_INFO))
+                .where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento <= hoy + timedelta(days=settings.ALERT_DAYS_INFO)))
             )
             for itv, rua, orden in itv_q.all():
                 diff = (itv.fecha_vencimiento - hoy).days

@@ -27,12 +27,12 @@ async def obtener_kpis(
 
 
 
-    # ITV — toma el último ITV por bus
-    itv_vigente    = (await db.execute(select(func.count()).select_from(ItvBus).where(ItvBus.fecha_vencimiento > en_30))).scalar()
+    # ITV — toma la ITV vigente de cada bus
+    itv_vigente    = (await db.execute(select(func.count()).select_from(ItvBus).where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento > en_30)))).scalar()
     itv_por_vencer = (await db.execute(select(func.count()).select_from(ItvBus).where(
-        and_(ItvBus.fecha_vencimiento >= hoy, ItvBus.fecha_vencimiento <= en_30)
+        and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento >= hoy, ItvBus.fecha_vencimiento <= en_30)
     ))).scalar()
-    itv_vencido    = (await db.execute(select(func.count()).select_from(ItvBus).where(ItvBus.fecha_vencimiento < hoy))).scalar()
+    itv_vencido    = (await db.execute(select(func.count()).select_from(ItvBus).where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento < hoy)))).scalar()
 
     # Seguros
     seg_vigentes   = (await db.execute(select(func.count()).select_from(SeguroBus).where(SeguroBus.fecha_vencimiento > en_30))).scalar()

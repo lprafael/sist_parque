@@ -187,6 +187,7 @@ class ItvBusBase(BaseModel):
     numero_certificado: Optional[str] = None
     observaciones: Optional[str] = None
     archivo_certificado_url: Optional[str] = None
+    es_vigente: bool = True
 
 class ItvBusCreate(ItvBusBase):
     pass
@@ -198,9 +199,11 @@ class ItvBusUpdate(BaseModel):
     centro_itv: Optional[str] = None
     numero_certificado: Optional[str] = None
     observaciones: Optional[str] = None
+    es_vigente: Optional[bool] = None
 
 class ItvBusOut(ItvBusBase):
     id_itv: int
+    es_vigente: bool = True
     fecha_registro: Optional[datetime] = None
     dias_para_vencer: Optional[int] = None
     estado_itv: Optional[str] = None   # VIGENTE / POR_VENCER / VENCIDO

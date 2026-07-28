@@ -7,10 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, ItvBus, BusEmpresa
-from app.schemas import BusCreate, BusUpdate, BusOut
-from app.models import Auditoria
-import json
+from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, ItvBus, BusEmpresa, Eot, Auditoria
 
 router = APIRouter(prefix="/buses", tags=["Buses"])
 
@@ -62,6 +59,20 @@ async def listar_buses(
         filters.append(Bus.estado_bus == estado_bus.upper())
     if id_marca:
         filters.append(Bus.id_marca == id_marca)
+    if empresa:
+        subq = (
+            select(BusEmpresa.id_bus)
+            .join(Eot, Eot.id_eot_vmt_hex == BusEmpresa.id_eot, isouter=True)
+            .where(
+                BusEmpresa.estado_asignacion == "ACTIVA",
+                or_(
+                    BusEmpresa.id_eot == empresa,
+                    Eot.id_eot_vmt_hex == empresa,
+                    Eot.eot_nombre.ilike(f"%{empresa}%")
+                )
+            )
+        )
+        filters.append(Bus.id_bus.in_(subq))
 
     if filters:
         q = q.where(and_(*filters))
@@ -72,7 +83,7 @@ async def listar_buses(
     q = q.offset((page - 1) * page_size).limit(page_size).order_by(Bus.numero_orden)
     buses = (await db.execute(q)).scalars().all()
 
-    # Enriquecer con ITV
+    # Enriquecer con ITV y Nombre de Empresa
     items = []
     for bus in buses:
         itv_q = (
@@ -84,11 +95,17 @@ async def listar_buses(
         itv = (await db.execute(itv_q)).scalar_one_or_none()
 
         emp_q = (
-            select(BusEmpresa.id_eot)
+            select(Eot.eot_nombre, BusEmpresa.id_eot)
+            .join(BusEmpresa, BusEmpresa.id_eot == Eot.id_eot_vmt_hex)
             .where(BusEmpresa.id_bus == bus.id_bus, BusEmpresa.estado_asignacion == "ACTIVA")
             .limit(1)
         )
-        empresa_actual = (await db.execute(emp_q)).scalar_one_or_none()
+        emp_res = (await db.execute(emp_q)).one_or_none()
+        if emp_res:
+            empresa_nombre = emp_res[0] if emp_res[0] else emp_res[1]
+        else:
+            emp_q_raw = select(BusEmpresa.id_eot).where(BusEmpresa.id_bus == bus.id_bus, BusEmpresa.estado_asignacion == "ACTIVA").limit(1)
+            empresa_nombre = (await db.execute(emp_q_raw)).scalar_one_or_none()
 
         venc = itv.fecha_vencimiento if itv else None
         estado = calcular_estado_itv(venc)
@@ -115,7 +132,7 @@ async def listar_buses(
             marca_nombre=bus.marca.nombre if bus.marca else None,
             tipo_carroceria_nombre=bus.tipo_carroceria.descripcion if bus.tipo_carroceria else None,
             marca_carroceria_nombre=bus.marca_carroceria.nombre if bus.marca_carroceria else None,
-            empresa_actual=empresa_actual,
+            empresa_actual=empresa_nombre,
             itv_vencimiento=venc,
             itv_estado=estado,
         )

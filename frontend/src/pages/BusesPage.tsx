@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { busesApi } from '../api'
-import { Search, Plus, RefreshCw, Edit2 } from 'lucide-react'
+import { busesApi, empresasApi } from '../api'
+import { Search, Plus, RefreshCw, Edit2, X, Building2 } from 'lucide-react'
 import BusModal from '../components/buses/BusModal'
 
 function estadoBadge(estado: string) {
@@ -21,21 +22,39 @@ function diasLabel(venc: string | null) {
 }
 
 export default function BusesPage() {
-  const [search, setSearch]       = useState('')
-  const [page, setPage]           = useState(1)
-  const [estadoBus, setEstadoBus] = useState('')
-  const [estadoItv, setEstadoItv] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const empresaParam = searchParams.get('empresa') ?? ''
+
+  const [search, setSearch]           = useState('')
+  const [page, setPage]               = useState(1)
+  const [estadoBus, setEstadoBus]     = useState('')
+  const [estadoItv, setEstadoItv]     = useState('')
+  const [empresa, setEmpresa]         = useState(empresaParam)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [busToEdit, setBusToEdit] = useState<any>(null)
+  const [busToEdit, setBusToEdit]     = useState<any>(null)
   const PAGE_SIZE = 25
 
+  // Sincronizar parámetro URL si cambia externamente
+  useEffect(() => {
+    setEmpresa(empresaParam)
+  }, [empresaParam])
+
+  // Catálogo de empresas permisionarias para el dropdown de filtro
+  const { data: empresasData } = useQuery<{ data: { items: any[] } }>({
+    queryKey: ['empresas-filtro-buses'],
+    queryFn: () => empresasApi.listar({ page: 1, page_size: 200, solo_activas: true, solo_permisionarias: true })
+  })
+
+  const empresasLista = empresasData?.data?.items ?? []
+
   const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total: number } }>({
-    queryKey: ['buses', page, search, estadoBus, estadoItv],
+    queryKey: ['buses', page, search, estadoBus, estadoItv, empresa],
     queryFn: () => busesApi.listar({
       page, page_size: PAGE_SIZE,
       ...(search    && { search }),
       ...(estadoBus && { estado_bus: estadoBus }),
       ...(estadoItv && { estado_itv: estadoItv }),
+      ...(empresa   && { empresa }),
     }),
   })
 
@@ -48,6 +67,17 @@ export default function BusesPage() {
   const total = data?.data?.total ?? 0
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
+  const handleEmpresaChange = (val: string) => {
+    setEmpresa(val)
+    setPage(1)
+    if (val) {
+      setSearchParams({ empresa: val })
+    } else {
+      searchParams.delete('empresa')
+      setSearchParams(searchParams)
+    }
+  }
+
   const handleOpenCreate = () => {
     setBusToEdit(null)
     setIsModalOpen(true)
@@ -57,6 +87,9 @@ export default function BusesPage() {
     setBusToEdit(bus)
     setIsModalOpen(true)
   }
+
+  // Nombre de la empresa seleccionada si está filtrando
+  const empSeleccionadaObj = empresasLista.find((e: any) => e.id_eot_vmt_hex === empresa || e.eot_nombre === empresa)
 
   return (
     <div>
@@ -86,6 +119,17 @@ export default function BusesPage() {
               onChange={e => { setSearch(e.target.value); setPage(1) }}
             />
           </div>
+
+          <select className="form-control" style={{ maxWidth: '240px' }}
+            value={empresa} onChange={e => handleEmpresaChange(e.target.value)}>
+            <option value="">Todas las empresas</option>
+            {empresasLista.map((e: any) => (
+              <option key={e.eot_id} value={e.id_eot_vmt_hex}>
+                {e.eot_nombre}
+              </option>
+            ))}
+          </select>
+
           <select className="form-control" style={{ width: '160px' }}
             value={estadoBus} onChange={e => { setEstadoBus(e.target.value); setPage(1) }}>
             <option value="">Todos los estados</option>
@@ -101,6 +145,26 @@ export default function BusesPage() {
             <option value="VENCIDO">Vencido</option>
             <option value="SIN_ITV">Sin ITV</option>
           </select>
+
+          {empresa && (
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                background: 'rgba(33,150,243,0.12)',
+                color: '#82b1ff',
+                borderColor: 'rgba(33,150,243,0.3)',
+                fontSize: '0.78rem'
+              }}
+              onClick={() => handleEmpresaChange('')}
+            >
+              <Building2 size={13} />
+              Empresa: <strong>{empSeleccionadaObj?.eot_nombre ?? empresa}</strong>
+              <X size={13} style={{ marginLeft: 2 }} />
+            </button>
+          )}
         </div>
       </div>
 

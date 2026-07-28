@@ -17,19 +17,111 @@ from app.core.database import Base
 SCHEMA = "registro_habilitacion"
 
 
+# ============================================================
+# AUTENTICACIÓN CENTRALIZADA (schema "sistema")
+# ============================================================
+
+class Organismo(Base):
+    __tablename__ = "organismos"
+    __table_args__ = {"schema": "sistema"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    sigla = Column(String(20), nullable=False, unique=True)
+    nombre_completo = Column(String(200), nullable=False)
+    activo = Column(Boolean, default=True)
+
+
+class SistemaApp(Base):
+    __tablename__ = "sistemas"
+    __table_args__ = {"schema": "sistema"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100), unique=True, nullable=False)
+    descripcion = Column(String(200))
+    activo = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=func.now())
+
+    habilitaciones = relationship("UsuarioSistemaRol", back_populates="sistema")
+
+
+class Rol(Base):
+    __tablename__ = "roles"
+    __table_args__ = {"schema": "sistema"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(50), unique=True, index=True, nullable=False)
+    descripcion = Column(String(200))
+    activo = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=func.now())
+
+    habilitaciones_usuarios = relationship("UsuarioSistemaRol", back_populates="rol")
+
+
+class UsuarioSistemaRol(Base):
+    __tablename__ = "usuario_sistema_rol"
+    __table_args__ = {"schema": "sistema"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("sistema.usuarios.id"), nullable=False)
+    sistema_id = Column(Integer, ForeignKey("sistema.sistemas.id"), nullable=False)
+    rol_id = Column(Integer, ForeignKey("sistema.roles.id"), nullable=False)
+    activo = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=func.now())
+
+    usuario = relationship("Usuario", back_populates="habilitaciones_sistemas")
+    sistema = relationship("SistemaApp", back_populates="habilitaciones")
+    rol = relationship("Rol", back_populates="habilitaciones_usuarios")
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
-    __table_args__ = {"schema": SCHEMA}
+    __table_args__ = {"schema": "sistema"}
 
-    id_usuario      = Column(Integer, primary_key=True, index=True)
-    username        = Column(String(50), unique=True, nullable=False, index=True)
-    email           = Column(String(100), unique=True, nullable=False)
-    password_hash   = Column(String(255), nullable=False)
-    nombre_completo = Column(String(200))
-    rol             = Column(String(50))           # ADMIN, SUPERVISOR, OPERADOR, CONSULTA
-    estado_usuario  = Column(String(20), default="ACTIVO")
-    ultimo_acceso   = Column(DateTime)
-    fecha_registro  = Column(DateTime, default=func.now())
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    nombre_completo = Column(String(100), nullable=False)
+    activo = Column(Boolean, default=True)
+    fecha_creacion = Column(DateTime, default=func.now())
+    ultimo_acceso = Column(DateTime)
+    creado_por = Column(Integer, ForeignKey("sistema.usuarios.id"), nullable=True)
+    id_organismo = Column(Integer, ForeignKey("sistema.organismos.id"), nullable=True)
+
+    habilitaciones_sistemas = relationship("UsuarioSistemaRol", back_populates="usuario")
+    organismo = relationship("Organismo")
+
+    # Propiedades de compatibilidad
+    @property
+    def id_usuario(self) -> int:
+        return self.id
+
+    @property
+    def password_hash(self) -> str:
+        return self.hashed_password
+
+    @property
+    def estado_usuario(self) -> str:
+        return "ACTIVO" if self.activo else "INACTIVO"
+
+    @property
+    def fecha_registro(self) -> DateTime:
+        return self.fecha_creacion
+
+
+class LogAcceso(Base):
+    __tablename__ = "logs_acceso"
+    __table_args__ = {"schema": "sistema"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("sistema.usuarios.id"), nullable=True)
+    username = Column(String(50), nullable=False)
+    accion = Column(String(50), nullable=False)
+    ip_address = Column(String(45))
+    user_agent = Column(Text)
+    fecha = Column(DateTime, default=func.now())
+    detalles = Column(JSONB)
+    exitoso = Column(Boolean, default=True)
 
 
 class Marca(Base):

@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { empresasApi } from '../api'
-import { Search, Building2, Bus } from 'lucide-react'
+import { Search, Building2, Bus, ArrowRight } from 'lucide-react'
 
 export default function EmpresasPage() {
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [page, setPage]     = useState(1)
   const PAGE_SIZE = 20
@@ -54,44 +56,76 @@ export default function EmpresasPage() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' }}>
           {empresas.map((emp: any) => (
-            <div key={emp.eot_id} className="card" style={{ padding: '18px' }}>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                <div className="kpi-icon blue" style={{ width: '44px', height: '44px', flexShrink: 0 }}>
-                  <Building2 size={20} />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '4px',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {emp.eot_nombre}
+            <div
+              key={emp.eot_id}
+              className="card"
+              style={{
+                padding: '18px',
+                display: 'flex',
+                flexDirection: 'column',
+                justify: 'space-between',
+                transition: 'border-color 0.2s ease, transform 0.2s ease',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                  <div className="kpi-icon blue" style={{ width: '44px', height: '44px', flexShrink: 0 }}>
+                    <Building2 size={20} />
                   </div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                    ID EOT: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                      {emp.id_eot_vmt_hex}
-                    </strong>
-                  </div>
-                  {emp.eot_linea && (
-                    <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-                      Líneas: {emp.eot_linea.trim()}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '4px',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {emp.eot_nombre}
                     </div>
-                  )}
-                  <div style={{ display: 'flex', gap: '12px', fontSize: '0.73rem' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>
-                      <Bus size={11} style={{ display: 'inline', marginRight: 3 }} />
-                      {emp.operativo ?? 0} operativos
-                    </span>
-                    <span style={{ color: 'var(--text-muted)' }}>
-                      {emp.autorizado ?? 0} autorizados
-                    </span>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      ID EOT: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
+                        {emp.id_eot_vmt_hex}
+                      </strong>
+                    </div>
+                    {emp.eot_linea && (
+                      <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                        Líneas: {emp.eot_linea.trim()}
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: '12px', fontSize: '0.73rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        <Bus size={11} style={{ display: 'inline', marginRight: 3 }} />
+                        {emp.operativo ?? 0} operativos
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}>
+                        {emp.autorizado ?? 0} autorizados
+                      </span>
+                    </div>
                   </div>
                 </div>
+                {emp.e_mail && (
+                  <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)',
+                    fontSize: '0.73rem', color: 'var(--text-muted)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {emp.e_mail.trim()}
+                  </div>
+                )}
               </div>
-              {emp.e_mail && (
-                <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid var(--border)',
-                  fontSize: '0.73rem', color: 'var(--text-muted)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {emp.e_mail.trim()}
-                </div>
-              )}
+
+              <button
+                className="btn btn-secondary btn-sm"
+                style={{
+                  marginTop: '14px',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justify: 'center',
+                  gap: '6px',
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: '#82b1ff',
+                  borderColor: 'rgba(33,150,243,0.25)',
+                  background: 'rgba(33,150,243,0.08)'
+                }}
+                onClick={() => navigate(`/buses?empresa=${emp.id_eot_vmt_hex}`)}
+              >
+                <Bus size={13} /> Ver Buses de Empresa <ArrowRight size={13} />
+              </button>
             </div>
           ))}
         </div>

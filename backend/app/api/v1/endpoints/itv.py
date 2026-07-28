@@ -147,7 +147,7 @@ async def historial_itv_bus(id_bus: int, db: AsyncSession = Depends(get_db), _=D
     historial = []
     for idx, rec in enumerate(records):
         prev_venc = records[idx - 1].fecha_vencimiento if idx > 0 else None
-        diff_days = (rec.fecha_vencimiento - prev_venc).days if prev_venc else None
+        diff_days = (rec.fecha_itv - prev_venc).days if prev_venc else None
 
         historial.append(HistorialItvOut(
             id_historial=rec.id_itv,

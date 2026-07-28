@@ -103,9 +103,13 @@ export default function ItvHistoryModal({
                         {formatDate(item.fecha_vencimiento_actual)}
                       </td>
                       <td>
-                        <span className={`badge ${item.diferencia_dias > 0 ? 'badge-vigente' : 'badge-vencido'}`}>
-                          {item.diferencia_dias > 0 ? `+${item.diferencia_dias}` : item.diferencia_dias} días
-                        </span>
+                        {item.diferencia_dias !== null && item.diferencia_dias !== undefined ? (
+                          <span className={`badge ${item.diferencia_dias <= 0 ? 'badge-vigente' : 'badge-vencido'}`}>
+                            {item.diferencia_dias > 0 ? `+${item.diferencia_dias}` : item.diferencia_dias} días
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>N/A</span>
+                        )}
                       </td>
                     </tr>
                   ))}

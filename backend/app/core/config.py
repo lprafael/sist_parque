@@ -29,13 +29,13 @@ class Settings(BaseSettings):
     DB_HOST: str = "168.90.177.232"
     DB_PORT: int = 2024
     DB_USER: str = "cid_admin_user"
-    DB_PASSWORD: str = ""
+    DB_PASSWORD: str = "vmtdmtcidccm"
     DB_NAME: str = "bbdd-monitoreo-cid"
     DB_SCHEMA: str = "registro_habilitacion"
     DB_SSL: bool = False
 
     # JWT
-    SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION"
+    SECRET_KEY: str = "vmt_parque_secret_key_2026"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7

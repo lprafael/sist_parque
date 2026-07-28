@@ -12,11 +12,11 @@ services:
       - DB_HOST=${DB_HOST:-168.90.177.232}
       - DB_PORT=${DB_PORT:-2024}
       - DB_USER=${DB_USER:-cid_admin_user}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_PASSWORD=${DB_PASSWORD:-vmtdmtcidccm}
       - DB_NAME=${DB_NAME:-bbdd-monitoreo-cid}
       - DB_SCHEMA=registro_habilitacion
       - DB_SSL=false
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-vmt_parque_secret_key_2026}
       - ENVIRONMENT=production
       - DEBUG=false
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost}

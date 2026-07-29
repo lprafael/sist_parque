@@ -148,25 +148,38 @@ class CompaniaSeguro(Base):
     seguros = relationship("SeguroBus", back_populates="compania")
 
 
+class TipoSeguro(Base):
+    __tablename__ = "tipos_seguro"
+    __table_args__ = {"schema": SCHEMA}
+
+    id_tipo_seguro = Column(Integer, primary_key=True, index=True)
+    nombre         = Column(String(50), nullable=False, unique=True)
+    descripcion    = Column(String(200))
+    activo         = Column(Boolean, default=True)
+
+    seguros = relationship("SeguroBus", back_populates="tipo")
+
+
 class SeguroBus(Base):
     __tablename__ = "seguros_bus"
     __table_args__ = {"schema": SCHEMA}
 
     id_seguro           = Column(Integer, primary_key=True, index=True)
     id_bus              = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"))
-    tipo_seguro         = Column(String(50))       # PASAJEROS / TERCEROS
+    id_tipo_seguro      = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_seguro.id_tipo_seguro"), nullable=False)
     id_compania         = Column(Integer, ForeignKey(f"{SCHEMA}.companias_seguros.id_compania"))
     numero_poliza       = Column(String(100))
     fecha_inicio        = Column(Date, nullable=False)
     fecha_vencimiento   = Column(Date, nullable=False, index=True)
     monto_cobertura     = Column(Numeric)
-    estado_seguro       = Column(String(20), default="VIGENTE")
+    seguro_vigente      = Column(Boolean, default=True, nullable=False, index=True)
     archivo_poliza_url  = Column(String(500))
     observaciones       = Column(Text)
     fecha_registro      = Column(DateTime, default=func.now())
 
     bus      = relationship("Bus", back_populates="seguros")
     compania = relationship("CompaniaSeguro", back_populates="seguros")
+    tipo     = relationship("TipoSeguro", back_populates="seguros")
 
 
 class DocumentoBus(Base):

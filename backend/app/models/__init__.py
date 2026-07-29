@@ -289,14 +289,13 @@ class SeguroBus(Base):
 
     id_seguro           = Column(Integer, primary_key=True, index=True)
     id_bus              = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"))
-    tipo_seguro         = Column(String(50))  # legado; preferir id_tipo_seguro
-    id_tipo_seguro      = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_seguro.id_tipo_seguro"))
+    id_tipo_seguro      = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_seguro.id_tipo_seguro"), nullable=False)
     id_compania         = Column(Integer, ForeignKey(f"{SCHEMA}.companias_seguros.id_compania"))
     numero_poliza       = Column(String(100))
     fecha_inicio        = Column(Date, nullable=False)
     fecha_vencimiento   = Column(Date, nullable=False, index=True)
     monto_cobertura     = Column(Numeric)
-    estado_seguro       = Column(String(20), default="VIGENTE")
+    seguro_vigente      = Column(Boolean, default=True, nullable=False, index=True)
     archivo_poliza_url  = Column(String(500))
     observaciones       = Column(Text)
     fecha_registro      = Column(DateTime, default=func.now())

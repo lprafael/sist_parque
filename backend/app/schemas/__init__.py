@@ -287,33 +287,32 @@ class CompaniaSeguroCreate(BaseModel):
 
 class SeguroBusBase(BaseModel):
     id_bus: int
-    tipo_seguro: Optional[str] = None       # legado PASAJEROS / TERCEROS
-    id_tipo_seguro: Optional[int] = None
+    id_tipo_seguro: int
     id_compania: Optional[int] = None
     numero_poliza: Optional[str] = None
     fecha_inicio: date
     fecha_vencimiento: date
     monto_cobertura: Optional[float] = None
+    seguro_vigente: bool = True
     observaciones: Optional[str] = None
 
 class SeguroBusCreate(SeguroBusBase):
     pass
 
 class SeguroBusUpdate(BaseModel):
-    tipo_seguro: Optional[str] = None
     id_tipo_seguro: Optional[int] = None
     id_compania: Optional[int] = None
     numero_poliza: Optional[str] = None
     fecha_inicio: Optional[date] = None
     fecha_vencimiento: Optional[date] = None
     monto_cobertura: Optional[float] = None
-    estado_seguro: Optional[str] = None
+    seguro_vigente: Optional[bool] = None
     observaciones: Optional[str] = None
 
 class SeguroBusOut(SeguroBusBase):
     id_seguro: int
-    estado_seguro: str
     dias_para_vencer: Optional[int] = None
+    estado_calculado: Optional[str] = None  # VIGENTE / POR_VENCER / CRITICO / VENCIDO (derivado de fecha)
     compania_nombre: Optional[str] = None
     tipo_seguro_nombre: Optional[str] = None
     fecha_registro: Optional[datetime] = None

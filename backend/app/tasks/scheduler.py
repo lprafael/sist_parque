@@ -21,7 +21,7 @@ scheduler = AsyncIOScheduler(timezone="America/Asuncion")
 async def generar_alertas():
     """Job principal: revisa vencimientos y crea/actualiza alertas."""
     from app.core.database import AsyncSessionLocal
-    from app.models import ItvBus, SeguroBus, Alerta, Bus
+    from app.models import ItvBus, SeguroBus, TipoSeguro, Alerta, Bus
     from sqlalchemy import select, and_
 
     hoy = date.today()
@@ -74,17 +74,21 @@ async def generar_alertas():
 
             # ---- Seguros ----
             seg_q = await db.execute(
-                select(SeguroBus, Bus.rua, Bus.numero_orden)
+                select(SeguroBus, Bus.rua, Bus.numero_orden, TipoSeguro.nombre)
                 .join(Bus, Bus.id_bus == SeguroBus.id_bus)
-                .where(SeguroBus.fecha_vencimiento <= hoy + timedelta(days=settings.ALERT_DAYS_INFO))
+                .join(TipoSeguro, TipoSeguro.id_tipo_seguro == SeguroBus.id_tipo_seguro)
+                .where(
+                    SeguroBus.seguro_vigente == True,
+                    SeguroBus.fecha_vencimiento <= hoy + timedelta(days=settings.ALERT_DAYS_INFO),
+                )
             )
-            for seg, rua, orden in seg_q.all():
+            for seg, rua, orden, tipo_nombre in seg_q.all():
                 diff = (seg.fecha_vencimiento - hoy).days
                 prioridad = (
                     "ALTA" if diff <= settings.ALERT_DAYS_CRITICAL
                     else ("MEDIA" if diff <= settings.ALERT_DAYS_WARNING else "BAJA")
                 )
-                tipo = f"SEGURO_{seg.tipo_seguro}"
+                tipo = f"SEGURO_{tipo_nombre}"
                 estado_txt = "VENCIDO" if diff < 0 else f"vence en {diff} días"
 
                 dup = await db.execute(
@@ -101,9 +105,9 @@ async def generar_alertas():
                     db.add(Alerta(
                         tipo_alerta=tipo,
                         id_bus=seg.id_bus,
-                        titulo=f"Seguro {seg.tipo_seguro} {estado_txt.upper()} — Bus {rua}",
+                        titulo=f"Seguro {tipo_nombre} {estado_txt.upper()} — Bus {rua}",
                         descripcion=(
-                            f"El seguro de {seg.tipo_seguro} del bus {rua} "
+                            f"El seguro de {tipo_nombre} del bus {rua} "
                             f"{'venció el' if diff < 0 else 'vence el'} "
                             f"{seg.fecha_vencimiento.strftime('%d/%m/%Y')}. "
                             f"Póliza: {seg.numero_poliza or 'N/A'}"

@@ -5,7 +5,7 @@ from sqlalchemy import select, func, and_, or_, text
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models import Bus, ItvBus, SeguroBus, Alerta, Eot, BusEmpresa
+from app.models import Bus, ItvBus, SeguroBus, TipoSeguro, Alerta, Eot, BusEmpresa
 from app.schemas import KpiDashboard
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard & KPIs"])
@@ -90,9 +90,16 @@ async def vencimientos_proximos(
 
     # Seguros
     seg_q = await db.execute(
-        select(SeguroBus, Bus.rua, Bus.numero_orden)
+        select(SeguroBus, Bus.rua, Bus.numero_orden, TipoSeguro.nombre)
         .join(Bus, Bus.id_bus == SeguroBus.id_bus)
-        .where(and_(SeguroBus.fecha_vencimiento >= hoy, SeguroBus.fecha_vencimiento <= limite))
+        .join(TipoSeguro, TipoSeguro.id_tipo_seguro == SeguroBus.id_tipo_seguro)
+        .where(
+            and_(
+                SeguroBus.seguro_vigente == True,
+                SeguroBus.fecha_vencimiento >= hoy,
+                SeguroBus.fecha_vencimiento <= limite,
+            )
+        )
         .order_by(SeguroBus.fecha_vencimiento)
     )
     seg_rows = seg_q.all()
@@ -109,10 +116,10 @@ async def vencimientos_proximos(
             "dias_restantes": diff,
             "prioridad": "ALTA" if diff <= 7 else ("MEDIA" if diff <= 15 else "BAJA"),
         })
-    for seg, rua, orden in seg_rows:
+    for seg, rua, orden, tipo_nombre in seg_rows:
         diff = (seg.fecha_vencimiento - hoy).days
         items.append({
-            "tipo": f"SEGURO_{seg.tipo_seguro}",
+            "tipo": f"SEGURO_{tipo_nombre}",
             "id_bus": seg.id_bus,
             "rua": rua,
             "numero_orden": orden,

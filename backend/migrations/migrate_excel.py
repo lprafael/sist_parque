@@ -196,11 +196,22 @@ def main(excel_path: str):
         try:
             for tipo, fecha_venc in [("PASAJEROS", seg_pas), ("TERCEROS", seg_ter)]:
                 if fecha_venc:
+                    cur.execute(
+                        f"SELECT id_tipo_seguro FROM {SCHEMA}.tipos_seguro WHERE nombre = %s",
+                        (tipo,),
+                    )
+                    tipo_row = cur.fetchone()
+                    if not tipo_row:
+                        cur.execute(
+                            f"INSERT INTO {SCHEMA}.tipos_seguro (nombre) VALUES (%s) RETURNING id_tipo_seguro",
+                            (tipo,),
+                        )
+                        tipo_row = cur.fetchone()
                     cur.execute(f"""
                         INSERT INTO {SCHEMA}.seguros_bus
-                            (id_bus, tipo_seguro, fecha_inicio, fecha_vencimiento, estado_seguro)
-                        VALUES (%s,%s,%s,%s,'VIGENTE')
-                    """, (id_bus, tipo, date.today(), fecha_venc))
+                            (id_bus, id_tipo_seguro, fecha_inicio, fecha_vencimiento, seguro_vigente)
+                        VALUES (%s,%s,%s,%s,TRUE)
+                    """, (id_bus, tipo_row[0], date.today(), fecha_venc))
                     stats["seguros"] += 1
             conn.commit()
         except Exception as e:

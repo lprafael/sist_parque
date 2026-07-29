@@ -66,7 +66,7 @@ export default function SegurosPage() {
                   <tr key={seg.id_seguro}>
                     <td>#{seg.id_seguro}</td>
                     <td style={{ fontWeight: 600 }}>Bus #{seg.id_bus}</td>
-                    <td>{seg.tipo_seguro}</td>
+                    <td>{seg.tipo_seguro_nombre || '—'}</td>
                     <td>{seg.compania_nombre || '—'}</td>
                     <td>{seg.numero_poliza || '—'}</td>
                     <td style={{ fontFamily: 'monospace' }}>
@@ -74,9 +74,13 @@ export default function SegurosPage() {
                     </td>
                     <td>
                       <span className={`badge ${
-                        seg.estado_seguro === 'VIGENTE' ? 'badge-vigente' : 'badge-vencido'
+                        seg.seguro_vigente
+                          ? (seg.estado_calculado === 'VENCIDO' ? 'badge-vencido' : 'badge-vigente')
+                          : 'badge-sin-itv'
                       }`}>
-                        {seg.estado_seguro}
+                        {seg.seguro_vigente
+                          ? (seg.estado_calculado || 'VIGENTE')
+                          : 'NO VIGENTE'}
                       </span>
                     </td>
                   </tr>

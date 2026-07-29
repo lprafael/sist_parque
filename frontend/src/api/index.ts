@@ -108,7 +108,8 @@ export const importadorApi = {
 
 // ── Reportes ──────────────────────────────────────
 export const reportesApi = {
-  descargarBusesExcel: () =>
-    api.get('/reportes/buses/excel', { responseType: 'blob' }),
+  opciones: () => api.get('/reportes/opciones'),
+  descargarBusesExcel: (params?: Record<string, string | number>) =>
+    api.get('/reportes/buses/excel', { params, responseType: 'blob' }),
 }
 

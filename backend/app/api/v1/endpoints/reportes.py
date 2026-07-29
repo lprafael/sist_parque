@@ -14,7 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models import Bus, BusEmpresa, Eot
+from app.models import Bus, BusEmpresa, Eot, TipoServicio
 from app.api.v1.endpoints.buses import calcular_estado_itv
 
 router = APIRouter(prefix="/reportes", tags=["Reportes"])
@@ -164,6 +164,7 @@ async def exportar_buses_excel(
     estado_bus: Optional[str] = None,
     estado_itv: Optional[str] = None,
     id_marca: Optional[int] = None,
+    id_tipo_servicio: Optional[int] = None,
     tipo_servicio: Optional[str] = None,
     año_desde: Optional[int] = None,
     año_hasta: Optional[int] = None,
@@ -201,6 +202,7 @@ async def exportar_buses_excel(
             selectinload(Bus.marca),
             selectinload(Bus.tipo_carroceria),
             selectinload(Bus.marca_carroceria),
+            selectinload(Bus.tipo_servicio_rel),
             selectinload(Bus.itv_registros),
             selectinload(Bus.asignaciones),
         )
@@ -211,8 +213,13 @@ async def exportar_buses_excel(
         filters.append(Bus.estado_bus == estado_bus.upper())
     if id_marca:
         filters.append(Bus.id_marca == id_marca)
-    if tipo_servicio:
-        filters.append(Bus.tipo_servicio.ilike(f"%{tipo_servicio}%"))
+    if id_tipo_servicio:
+        filters.append(Bus.id_tipo_servicio == id_tipo_servicio)
+    elif tipo_servicio:
+        subq_tipo = select(TipoServicio.id_tipo_servicio).where(
+            TipoServicio.nombre.ilike(f"%{tipo_servicio}%")
+        )
+        filters.append(Bus.id_tipo_servicio.in_(subq_tipo))
     if año_desde is not None:
         filters.append(Bus.año >= año_desde)
     if año_hasta is not None:
@@ -285,7 +292,7 @@ async def exportar_buses_excel(
             "capacidad_pasajeros": b.capacidad_pasajeros if b.capacidad_pasajeros is not None else "-",
             "cilindrada": b.cilindrada or "-",
             "color": b.color or "-",
-            "tipo_servicio": b.tipo_servicio or "-",
+            "tipo_servicio": b.tipo_servicio_rel.nombre if b.tipo_servicio_rel else "-",
             "estado_bus": b.estado_bus or "-",
             "itv_vencimiento": venc,
             "itv_estado": estado,

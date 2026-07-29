@@ -204,7 +204,7 @@ export default function ReportesPage() {
   const [estadoBus, setEstadoBus] = useState('')
   const [estadoItv, setEstadoItv] = useState('')
   const [idMarca, setIdMarca] = useState('')
-  const [tipoServicio, setTipoServicio] = useState('')
+  const [idTipoServicio, setIdTipoServicio] = useState('')
   const [añoDesde, setAñoDesde] = useState('')
   const [añoHasta, setAñoHasta] = useState('')
   const [camposSel, setCamposSel] = useState<Set<string>>(() => keysFromDefaults(CAMPOS_DEFAULT))
@@ -240,12 +240,18 @@ export default function ReportesPage() {
   })
   const marcas = marcasData?.data ?? []
 
+  const { data: tiposServicioData } = useQuery({
+    queryKey: ['tipos-servicio'],
+    queryFn: busesApi.tiposServicio,
+  })
+  const tiposServicio = tiposServicioData?.data ?? []
+
   const limpiarFiltros = () => {
     setEmpresasSel([])
     setEstadoBus('')
     setEstadoItv('')
     setIdMarca('')
-    setTipoServicio('')
+    setIdTipoServicio('')
     setAñoDesde('')
     setAñoHasta('')
   }
@@ -268,7 +274,7 @@ export default function ReportesPage() {
       if (estadoBus) params.estado_bus = estadoBus
       if (estadoItv) params.estado_itv = estadoItv
       if (idMarca) params.id_marca = Number(idMarca)
-      if (tipoServicio) params.tipo_servicio = tipoServicio
+      if (idTipoServicio) params.id_tipo_servicio = Number(idTipoServicio)
       if (añoDesde) params.año_desde = Number(añoDesde)
       if (añoHasta) params.año_hasta = Number(añoHasta)
 
@@ -364,12 +370,12 @@ export default function ReportesPage() {
 
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Tipo de servicio</label>
-            <input
-              className="form-control"
-              placeholder="Ej. Urbano, Interurbano..."
-              value={tipoServicio}
-              onChange={e => setTipoServicio(e.target.value)}
-            />
+            <select className="form-control" value={idTipoServicio} onChange={e => setIdTipoServicio(e.target.value)}>
+              <option value="">Todos</option>
+              {tiposServicio.map((t: any) => (
+                <option key={t.id_tipo_servicio} value={t.id_tipo_servicio}>{t.nombre}</option>
+              ))}
+            </select>
           </div>
 
           <div className="form-group" style={{ marginBottom: 0 }}>

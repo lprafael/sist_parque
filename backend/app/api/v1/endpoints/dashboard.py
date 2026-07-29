@@ -207,20 +207,31 @@ async def distribucion_tipo_servicio(
     _=Depends(get_current_user)
 ):
     """Distribución de buses por Tipo de Servicio."""
-    
+    from app.models import TipoServicio
+
     result = await db.execute(
-        select(Bus.tipo_servicio, func.count(Bus.id_bus).label("cantidad"))
+        select(TipoServicio.nombre, func.count(Bus.id_bus).label("cantidad"))
+        .join(Bus, Bus.id_tipo_servicio == TipoServicio.id_tipo_servicio)
         .where(Bus.estado_bus == "ACTIVO")
-        .group_by(Bus.tipo_servicio)
+        .group_by(TipoServicio.nombre)
     )
     rows = result.all()
 
     items = []
-    for tipo_servicio, cnt in rows:
+    for nombre, cnt in rows:
         items.append({
-            "name": tipo_servicio if tipo_servicio else "SIN ESPECIFICAR",
+            "name": nombre if nombre else "SIN ESPECIFICAR",
             "value": cnt,
         })
+
+    sin = (await db.execute(
+        select(func.count()).select_from(Bus).where(
+            Bus.estado_bus == "ACTIVO",
+            Bus.id_tipo_servicio.is_(None),
+        )
+    )).scalar() or 0
+    if sin:
+        items.append({"name": "SIN ESPECIFICAR", "value": sin})
 
     return items
 

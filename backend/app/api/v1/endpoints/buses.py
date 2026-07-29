@@ -7,8 +7,8 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, TipoBus, ItvBus, BusEmpresa, Eot, Auditoria
-from app.schemas import BusCreate, BusUpdate, BusOut, TipoBusOut
+from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, TipoServicio, ItvBus, BusEmpresa, Eot, Auditoria
+from app.schemas import BusCreate, BusUpdate, BusOut, TipoServicioOut
 
 router = APIRouter(prefix="/buses", tags=["Buses"])
 
@@ -47,7 +47,7 @@ async def listar_buses(
             selectinload(Bus.marca),
             selectinload(Bus.tipo_carroceria),
             selectinload(Bus.marca_carroceria),
-            selectinload(Bus.tipo_bus),
+            selectinload(Bus.tipo_servicio_rel),
         )
     )
 
@@ -124,19 +124,18 @@ async def listar_buses(
             rua=bus.rua,
             id_tipo_carroceria=bus.id_tipo_carroceria,
             id_marca_carroceria=bus.id_marca_carroceria,
-            id_tipo_bus=bus.id_tipo_bus,
+            id_tipo_servicio=bus.id_tipo_servicio,
             capacidad_pasajeros=bus.capacidad_pasajeros,
             combustible=bus.combustible,
             cilindrada=bus.cilindrada,
             color=bus.color,
-            tipo_servicio=bus.tipo_servicio,
             estado_bus=bus.estado_bus,
             fecha_registro=bus.fecha_registro,
             fecha_modificacion=bus.fecha_modificacion,
             marca_nombre=bus.marca.nombre if bus.marca else None,
             tipo_carroceria_nombre=bus.tipo_carroceria.descripcion if bus.tipo_carroceria else None,
             marca_carroceria_nombre=bus.marca_carroceria.nombre if bus.marca_carroceria else None,
-            tipo_bus_nombre=bus.tipo_bus.nombre if bus.tipo_bus else None,
+            tipo_servicio_nombre=bus.tipo_servicio_rel.nombre if bus.tipo_servicio_rel else None,
             empresa_actual=empresa_nombre,
             itv_vencimiento=venc,
             itv_estado=estado,
@@ -156,7 +155,7 @@ async def obtener_bus(
         selectinload(Bus.marca),
         selectinload(Bus.tipo_carroceria),
         selectinload(Bus.marca_carroceria),
-        selectinload(Bus.tipo_bus),
+        selectinload(Bus.tipo_servicio_rel),
         selectinload(Bus.itv_registros),
         selectinload(Bus.seguros),
         selectinload(Bus.documentos),
@@ -182,19 +181,18 @@ async def obtener_bus(
         rua=bus.rua,
         id_tipo_carroceria=bus.id_tipo_carroceria,
         id_marca_carroceria=bus.id_marca_carroceria,
-        id_tipo_bus=bus.id_tipo_bus,
+        id_tipo_servicio=bus.id_tipo_servicio,
         capacidad_pasajeros=bus.capacidad_pasajeros,
         combustible=bus.combustible,
         cilindrada=bus.cilindrada,
         color=bus.color,
-        tipo_servicio=bus.tipo_servicio,
         estado_bus=bus.estado_bus,
         fecha_registro=bus.fecha_registro,
         fecha_modificacion=bus.fecha_modificacion,
         marca_nombre=bus.marca.nombre if bus.marca else None,
         tipo_carroceria_nombre=bus.tipo_carroceria.descripcion if bus.tipo_carroceria else None,
         marca_carroceria_nombre=bus.marca_carroceria.nombre if bus.marca_carroceria else None,
-        tipo_bus_nombre=bus.tipo_bus.nombre if bus.tipo_bus else None,
+        tipo_servicio_nombre=bus.tipo_servicio_rel.nombre if bus.tipo_servicio_rel else None,
         empresa_actual=empresa_act,
         itv_vencimiento=venc,
         itv_estado=calcular_estado_itv(venc),
@@ -298,9 +296,9 @@ async def listar_marcas_carroceria(db: AsyncSession = Depends(get_db), _=Depends
     return result.scalars().all()
 
 
-@router.get("/catalogo/tipos-bus", response_model=list[TipoBusOut])
-async def listar_tipos_bus(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+@router.get("/catalogo/tipos-servicio", response_model=list[TipoServicioOut])
+async def listar_tipos_servicio(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     result = await db.execute(
-        select(TipoBus).where(TipoBus.activo == True).order_by(TipoBus.nombre)
+        select(TipoServicio).where(TipoServicio.activo == True).order_by(TipoServicio.nombre)
     )
     return result.scalars().all()

@@ -96,8 +96,8 @@ class TipoCarroceriaOut(BaseModel):
     class Config:
         from_attributes = True
 
-class TipoBusOut(BaseModel):
-    id_tipo_bus: int
+class TipoServicioOut(BaseModel):
+    id_tipo_servicio: int
     nombre: str
     descripcion: Optional[str] = None
     activo: Optional[bool] = True
@@ -125,12 +125,11 @@ class BusBase(BaseModel):
     rua: str
     id_tipo_carroceria: Optional[int] = None
     id_marca_carroceria: Optional[int] = None
-    id_tipo_bus: Optional[int] = None
+    id_tipo_servicio: Optional[int] = None
     capacidad_pasajeros: Optional[int] = None
     combustible: Optional[str] = None
     cilindrada: Optional[str] = None
     color: Optional[str] = None
-    tipo_servicio: Optional[str] = None  # legado
     estado_bus: str = "ACTIVO"
 
 class BusCreate(BusBase):
@@ -144,12 +143,11 @@ class BusUpdate(BaseModel):
     rua: Optional[str] = None
     id_tipo_carroceria: Optional[int] = None
     id_marca_carroceria: Optional[int] = None
-    id_tipo_bus: Optional[int] = None
+    id_tipo_servicio: Optional[int] = None
     capacidad_pasajeros: Optional[int] = None
     combustible: Optional[str] = None
     cilindrada: Optional[str] = None
     color: Optional[str] = None
-    tipo_servicio: Optional[str] = None
     estado_bus: Optional[str] = None
 
 class BusOut(BusBase):
@@ -160,7 +158,7 @@ class BusOut(BusBase):
     marca_nombre: Optional[str] = None
     tipo_carroceria_nombre: Optional[str] = None
     marca_carroceria_nombre: Optional[str] = None
-    tipo_bus_nombre: Optional[str] = None
+    tipo_servicio_nombre: Optional[str] = None
     empresa_actual: Optional[str] = None
     itv_vencimiento: Optional[date] = None
     itv_estado: Optional[str] = None

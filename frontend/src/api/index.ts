@@ -33,7 +33,7 @@ export const busesApi = {
   marcas: () => api.get('/buses/catalogo/marcas'),
   tiposCarroceria: () => api.get('/buses/catalogo/tipos-carroceria'),
   marcasCarroceria: () => api.get('/buses/catalogo/marcas-carroceria'),
-  tiposBus: () => api.get('/buses/catalogo/tipos-bus'),
+  tiposServicio: () => api.get('/buses/catalogo/tipos-servicio'),
 }
 
 // ── Empresas (EOT - read-only) ────────────────────

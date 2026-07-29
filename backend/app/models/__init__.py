@@ -1,7 +1,7 @@
 """
 Modelos ORM SQLAlchemy — mapeados al schema registro_habilitacion de PostgreSQL.
 Tablas: usuarios(sistema), buses, marcas, marcas_carroceria, tipos_carroceria,
-tipos_bus, bus_empresa, itv_bus, seguros_bus, tipos_seguro, companias_seguros,
+tipos_servicio, bus_empresa, itv_bus, seguros_bus, tipos_seguro, companias_seguros,
 documentos_bus, documentos_eot, alertas, auditoria, auxiliar
 """
 
@@ -154,17 +154,17 @@ class TipoCarroceria(Base):
     buses = relationship("Bus", back_populates="tipo_carroceria")
 
 
-class TipoBus(Base):
-    """Catálogo de tipo de bus / servicio (CONVENCIONAL, DIFERENCIADO, ...)."""
-    __tablename__ = "tipos_bus"
+class TipoServicio(Base):
+    """Catálogo de tipo de servicio (CONVENCIONAL, DIFERENCIADO, ...)."""
+    __tablename__ = "tipos_servicio"
     __table_args__ = {"schema": SCHEMA}
 
-    id_tipo_bus = Column(Integer, primary_key=True, index=True)
-    nombre      = Column(String(100), nullable=False, unique=True)
-    descripcion = Column(String(200))
-    activo      = Column(Boolean, default=True)
+    id_tipo_servicio = Column(Integer, primary_key=True, index=True)
+    nombre           = Column(String(100), nullable=False, unique=True)
+    descripcion      = Column(String(200))
+    activo           = Column(Boolean, default=True)
 
-    buses = relationship("Bus", back_populates="tipo_bus")
+    buses = relationship("Bus", back_populates="tipo_servicio_rel")
 
 
 class Bus(Base):
@@ -179,26 +179,25 @@ class Bus(Base):
     rua                 = Column(String(20), unique=True, nullable=False, index=True)
     id_tipo_carroceria  = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_carroceria.id_tipo"))
     id_marca_carroceria = Column(Integer, ForeignKey(f"{SCHEMA}.marcas_carroceria.id_marca_carroceria"))
-    id_tipo_bus         = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_bus.id_tipo_bus"))
+    id_tipo_servicio    = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_servicio.id_tipo_servicio"))
     capacidad_pasajeros = Column(Integer)
     combustible         = Column(String(50))
     cilindrada          = Column(String(20))
     color               = Column(String(50))
-    tipo_servicio       = Column(String(50))  # legado; preferir id_tipo_bus
     estado_bus          = Column(String(20), default="ACTIVO")
     fecha_registro      = Column(DateTime, default=func.now())
     fecha_modificacion  = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Relaciones
-    marca            = relationship("Marca", back_populates="buses")
-    tipo_carroceria  = relationship("TipoCarroceria", back_populates="buses")
-    marca_carroceria = relationship("MarcaCarroceria", back_populates="buses")
-    tipo_bus         = relationship("TipoBus", back_populates="buses")
-    asignaciones     = relationship("BusEmpresa", back_populates="bus")
-    itv_registros    = relationship("ItvBus", back_populates="bus")
-    seguros          = relationship("SeguroBus", back_populates="bus")
-    documentos       = relationship("DocumentoBus", back_populates="bus")
-    alertas          = relationship("Alerta", back_populates="bus")
+    marca              = relationship("Marca", back_populates="buses")
+    tipo_carroceria    = relationship("TipoCarroceria", back_populates="buses")
+    marca_carroceria   = relationship("MarcaCarroceria", back_populates="buses")
+    tipo_servicio_rel  = relationship("TipoServicio", back_populates="buses")
+    asignaciones       = relationship("BusEmpresa", back_populates="bus")
+    itv_registros      = relationship("ItvBus", back_populates="bus")
+    seguros            = relationship("SeguroBus", back_populates="bus")
+    documentos         = relationship("DocumentoBus", back_populates="bus")
+    alertas            = relationship("Alerta", back_populates="bus")
 
 
 class BusEmpresa(Base):

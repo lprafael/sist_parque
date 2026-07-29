@@ -1,6 +1,7 @@
 """Parser y sincronización de la planilla ITV (hoja General)."""
 from __future__ import annotations
 
+import asyncio
 import io
 import re
 from dataclasses import dataclass, field
@@ -303,7 +304,7 @@ def parse_general_sheet(file_bytes: bytes) -> tuple[str, Optional[str], list[Exc
 
 
 async def build_preview(db: AsyncSession, file_bytes: bytes) -> PreviewResult:
-    hoja, fecha_corte, rows, errors = parse_general_sheet(file_bytes)
+    hoja, fecha_corte, rows, errors = await asyncio.to_thread(parse_general_sheet, file_bytes)
     preview = PreviewResult(
         hoja=hoja,
         fecha_corte=fecha_corte,
@@ -529,7 +530,7 @@ async def sincronizar_estado_desde_excel(
     inactivar_fuera: bool = True,
 ) -> ApplyResult:
     """Solo alinea ACTIVO/INACTIVO según RUA/chasis del Excel (recuperación segura)."""
-    _, _, rows, _ = parse_general_sheet(file_bytes)
+    _, _, rows, _ = await asyncio.to_thread(parse_general_sheet, file_bytes)
     result = ApplyResult()
     excel_ruas = {r.rua for r in rows if r.rua}
     excel_chassis = {r.chassis for r in rows if r.chassis}
@@ -545,7 +546,7 @@ async def sincronizar_estado_desde_excel(
             b.estado_bus = "INACTIVO"
             result.buses_inactivados += 1
 
-    await db.commit()
+    # commit lo hace get_db
     return result
 
 
@@ -557,7 +558,7 @@ async def apply_import(
     crear_faltantes: bool = True,
     usuario: Optional[str] = None,
 ) -> ApplyResult:
-    hoja, fecha_corte, rows, _ = parse_general_sheet(file_bytes)
+    hoja, fecha_corte, rows, _ = await asyncio.to_thread(parse_general_sheet, file_bytes)
     result = ApplyResult()
     today = date.today()
 
@@ -573,6 +574,25 @@ async def apply_import(
             rua_map[str(b.rua).strip().upper()] = b
         if b.numero_chassis:
             chassis_map[str(b.numero_chassis).strip().upper()] = b
+
+    # Precarga ITV / seguros vigentes para evitar N+1 y scalar_one
+    itv_res = await db.execute(
+        select(ItvBus)
+        .where(ItvBus.es_vigente.is_(True))
+        .order_by(ItvBus.fecha_vencimiento.desc(), ItvBus.id_itv.desc())
+    )
+    itv_by_bus: dict[int, list[ItvBus]] = {}
+    for itv in itv_res.scalars().all():
+        itv_by_bus.setdefault(itv.id_bus, []).append(itv)
+
+    seg_res = await db.execute(
+        select(SeguroBus)
+        .where(SeguroBus.seguro_vigente.is_(True))
+        .order_by(SeguroBus.fecha_vencimiento.desc(), SeguroBus.id_seguro.desc())
+    )
+    seg_by_bus_tipo: dict[tuple[int, int], list[SeguroBus]] = {}
+    for seg in seg_res.scalars().all():
+        seg_by_bus_tipo.setdefault((seg.id_bus, seg.id_tipo_seguro), []).append(seg)
 
     marca_cache: dict = {}
     marca_carr_cache: dict = {}
@@ -641,7 +661,7 @@ async def apply_import(
                 seen_ids.add(bus.id_bus)
 
                 if r.vencimiento_itv:
-                    vigentes = await _list_itv_vigentes(db, bus.id_bus)
+                    vigentes = itv_by_bus.get(bus.id_bus, [])
                     current = vigentes[0] if vigentes else None
                     fecha_itv = r.fecha_itv or r.vencimiento_itv
                     same = (
@@ -654,20 +674,21 @@ async def apply_import(
                     if same:
                         for extra in vigentes[1:]:
                             extra.es_vigente = False
+                        itv_by_bus[bus.id_bus] = [current]
                         result.itv_sin_cambio += 1
                     else:
                         for itv in vigentes:
                             itv.es_vigente = False
-                        db.add(
-                            ItvBus(
-                                id_bus=bus.id_bus,
-                                fecha_itv=fecha_itv,
-                                fecha_vencimiento=r.vencimiento_itv,
-                                resultado_itv=r.resultado_itv,
-                                centro_itv=(r.taller[:200] if r.taller else None),
-                                es_vigente=True,
-                            )
+                        nuevo = ItvBus(
+                            id_bus=bus.id_bus,
+                            fecha_itv=fecha_itv,
+                            fecha_vencimiento=r.vencimiento_itv,
+                            resultado_itv=r.resultado_itv,
+                            centro_itv=(r.taller[:200] if r.taller else None),
+                            es_vigente=True,
                         )
+                        db.add(nuevo)
+                        itv_by_bus[bus.id_bus] = [nuevo]
                         result.itv_insertados += 1
 
                 for nombre_tipo, fecha_venc in (
@@ -677,23 +698,25 @@ async def apply_import(
                     if not fecha_venc:
                         continue
                     id_tipo = tipo_seguro[nombre_tipo]
-                    vigentes_seg = await _list_seguros_vigentes(db, bus.id_bus, id_tipo)
+                    key = (bus.id_bus, id_tipo)
+                    vigentes_seg = seg_by_bus_tipo.get(key, [])
                     cur_seg = vigentes_seg[0] if vigentes_seg else None
                     if cur_seg and cur_seg.fecha_vencimiento == fecha_venc:
                         for extra in vigentes_seg[1:]:
                             extra.seguro_vigente = False
+                        seg_by_bus_tipo[key] = [cur_seg]
                         continue
                     for seg in vigentes_seg:
                         seg.seguro_vigente = False
-                    db.add(
-                        SeguroBus(
-                            id_bus=bus.id_bus,
-                            id_tipo_seguro=id_tipo,
-                            fecha_inicio=today,
-                            fecha_vencimiento=fecha_venc,
-                            seguro_vigente=True,
-                        )
+                    nuevo_seg = SeguroBus(
+                        id_bus=bus.id_bus,
+                        id_tipo_seguro=id_tipo,
+                        fecha_inicio=today,
+                        fecha_vencimiento=fecha_venc,
+                        seguro_vigente=True,
                     )
+                    db.add(nuevo_seg)
+                    seg_by_bus_tipo[key] = [nuevo_seg]
                     result.seguros_insertados += 1
 
                 auxiliar_rows.append({
@@ -801,6 +824,5 @@ async def apply_import(
         if len(result.errores) < max_errores_guardados:
             result.errores.append(f"auxiliar (staging): {exc}")
 
-    await db.commit()
     _ = (hoja, fecha_corte, usuario, seen_ids)
     return result

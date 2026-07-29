@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, Play } from 'lucide-react'
 import { importadorApi } from '../api'
+import { formatApiError } from '../api/client'
 
 type PreviewData = {
   status: string
@@ -70,7 +71,7 @@ export default function ImportadorPage() {
       const res = await importadorApi.preview(formData)
       setPreview(res.data)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al analizar la planilla Excel.')
+      setError(formatApiError(err, 'Error al analizar la planilla Excel.'))
     } finally {
       setLoading(false)
     }
@@ -99,7 +100,7 @@ export default function ImportadorPage() {
       const res = await importadorApi.aplicar(formData)
       setApplyResult(res.data)
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al aplicar la importación.')
+      setError(formatApiError(err, 'Error al aplicar la importación.'))
     } finally {
       setApplying(false)
     }
@@ -134,7 +135,7 @@ export default function ImportadorPage() {
         errores: [],
       })
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al sincronizar estados.')
+      setError(formatApiError(err, 'Error al sincronizar estados.'))
     } finally {
       setApplying(false)
     }

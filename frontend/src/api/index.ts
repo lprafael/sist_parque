@@ -120,26 +120,14 @@ export const auditoriaApi = {
 // ── Importador ────────────────────────────────────
 export const importadorApi = {
   preview: (formData: FormData) =>
-    api.post('/importador/preview', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000,
-    }),
+    api.post('/importador/preview', formData, { timeout: 180000 }),
   aplicar: (formData: FormData) =>
-    api.post('/importador/aplicar', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000,
-    }),
+    api.post('/importador/aplicar', formData, { timeout: 600000 }),
   sincronizarEstado: (formData: FormData) =>
-    api.post('/importador/sincronizar-estado', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 300000,
-    }),
+    api.post('/importador/sincronizar-estado', formData, { timeout: 300000 }),
   /** @deprecated usar preview */
   uploadExcel: (formData: FormData) =>
-    api.post('/importador/preview', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000,
-    }),
+    api.post('/importador/preview', formData, { timeout: 180000 }),
 }
 
 // ── Reportes ──────────────────────────────────────

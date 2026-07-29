@@ -119,9 +119,21 @@ export const auditoriaApi = {
 
 // ── Importador ────────────────────────────────────
 export const importadorApi = {
-  uploadExcel: (formData: FormData) =>
-    api.post('/importador/upload-excel', formData, {
+  preview: (formData: FormData) =>
+    api.post('/importador/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    }),
+  aplicar: (formData: FormData) =>
+    api.post('/importador/aplicar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    }),
+  /** @deprecated usar preview */
+  uploadExcel: (formData: FormData) =>
+    api.post('/importador/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
     }),
 }
 

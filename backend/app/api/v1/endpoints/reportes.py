@@ -1,10 +1,12 @@
 import io
 from datetime import date
+from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable
 
 import openpyxl
+from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
@@ -12,10 +14,12 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models import Bus, ItvBus, BusEmpresa, Eot
+from app.models import Bus, BusEmpresa, Eot
 from app.api.v1.endpoints.buses import calcular_estado_itv
 
 router = APIRouter(prefix="/reportes", tags=["Reportes"])
+
+LOGO_PATH = Path(__file__).resolve().parents[3] / "static" / "Logo-MOPC-VMT.png"
 
 # ── Campos exportables ─────────────────────────────────────
 CAMPOS: Dict[str, Dict[str, Any]] = {
@@ -66,16 +70,14 @@ def _valor_campo(row: Dict[str, Any], key: str) -> Any:
     val = row.get(key)
     if val is None or val == "":
         return "-"
-    if key == "itv_vencimiento" and hasattr(val, "isoformat"):
-        return val.isoformat()
-    if key == "fecha_itv" and hasattr(val, "isoformat"):
+    if key in ("itv_vencimiento", "fecha_itv") and hasattr(val, "isoformat"):
         return val.isoformat()
     return val
 
 
 def _calcular_resumenes(rows: List[Dict[str, Any]], keys: List[str]) -> List[tuple]:
     anio_actual = date.today().year
-    antiguedades = [anio_actual - r["año"] for r in rows if r.get("año")]
+    antiguedades = [anio_actual - r["año"] for r in rows if isinstance(r.get("año"), int)]
     estados = [r.get("itv_estado") for r in rows]
 
     calculators: Dict[str, Callable[[], Any]] = {
@@ -103,6 +105,44 @@ def _calcular_resumenes(rows: List[Dict[str, Any]], keys: List[str]) -> List[tup
     return result
 
 
+def _insertar_logo(ws) -> int:
+    """Inserta el logo institucional como encabezado. Retorna la fila donde empieza el contenido."""
+    # Filas 1-3 reservadas para logo + título
+    ws.row_dimensions[1].height = 48
+    ws.row_dimensions[2].height = 8
+    ws.merge_cells(start_row=3, start_column=1, end_row=3, end_column=6)
+    title_cell = ws.cell(row=3, column=1, value="Sistema de Gestión de Parque Automotor — VMT")
+    title_cell.font = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
+    title_cell.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[3].height = 22
+
+    if LOGO_PATH.exists():
+        img = XLImage(str(LOGO_PATH))
+        # Logo original ~1986x163 → mantener proporción
+        img.width = 520
+        img.height = 43
+        ws.add_image(img, "A1")
+
+    return 5  # contenido a partir de la fila 5
+
+
+def _escribir_resumenes(ws, start_row: int, rows: List[Dict[str, Any]], resumenes_sel: List[str],
+                        border_thin, resumen_fill, resumen_title_font, resumen_label_font, resumen_value_font) -> int:
+    ws.cell(row=start_row, column=1, value="RESUMEN DEL REPORTE").font = resumen_title_font
+    resumen_rows = _calcular_resumenes(rows, resumenes_sel)
+    for i, (label, value) in enumerate(resumen_rows):
+        r = start_row + 1 + i
+        cell_l = ws.cell(row=r, column=1, value=label)
+        cell_v = ws.cell(row=r, column=2, value=value)
+        cell_l.font = resumen_label_font
+        cell_v.font = resumen_value_font
+        cell_l.fill = resumen_fill
+        cell_v.fill = resumen_fill
+        cell_l.border = border_thin
+        cell_v.border = border_thin
+    return start_row + 1 + len(resumen_rows)
+
+
 @router.get("/opciones")
 async def opciones_reporte(_=Depends(get_current_user)):
     """Catálogo de campos y resúmenes disponibles para el constructor de reportes."""
@@ -127,20 +167,33 @@ async def exportar_buses_excel(
     tipo_servicio: Optional[str] = None,
     año_desde: Optional[int] = None,
     año_hasta: Optional[int] = None,
-    campos: Optional[str] = Query(None, description="Claves de campos separadas por coma"),
+    campos: Optional[str] = Query(
+        None,
+        description="Claves de campos separadas por coma. Vacío o omitido con solo_resumen=true = sin detalle.",
+    ),
     resumenes: Optional[str] = Query(None, description="Claves de resúmenes separadas por coma"),
+    solo_resumen: bool = Query(False, description="Si true, no incluye tabla de detalle (solo resúmenes)"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
     """Generar Excel personalizado según filtros, campos y resúmenes seleccionados."""
-    empresas_ids = _parse_list(empresas)
-    campos_sel = _parse_list(campos) or [k for k, v in CAMPOS.items() if v["default"]]
-    campos_sel = [c for c in campos_sel if c in CAMPOS]
-    if not campos_sel:
+    # solo_resumen / campos="" → sin detalle; campos=None sin flag → defaults
+    if solo_resumen or campos == "":
+        campos_sel: List[str] = []
+    elif campos is None:
         campos_sel = [k for k, v in CAMPOS.items() if v["default"]]
+    else:
+        campos_sel = [c for c in _parse_list(campos) if c in CAMPOS]
 
-    resumenes_sel = _parse_list(resumenes)
-    resumenes_sel = [r for r in resumenes_sel if r in RESUMENES]
+    resumenes_sel = [r for r in _parse_list(resumenes) if r in RESUMENES]
+
+    if not campos_sel and not resumenes_sel:
+        raise HTTPException(
+            status_code=400,
+            detail="Seleccioná al menos un campo del reporte o un resumen.",
+        )
+
+    empresas_ids = _parse_list(empresas)
 
     q = (
         select(Bus)
@@ -222,7 +275,7 @@ async def exportar_buses_excel(
             "numero_orden": b.numero_orden or "-",
             "rua": b.rua or "-",
             "numero_chassis": b.numero_chassis or "-",
-            "año": b.año or "-",
+            "año": b.año if b.año is not None else "-",
             "antiguedad": (anio_actual - b.año) if b.año else "-",
             "marca": b.marca.nombre if b.marca else "-",
             "tipo_carroceria": b.tipo_carroceria.descripcion if b.tipo_carroceria else "-",
@@ -258,48 +311,57 @@ async def exportar_buses_excel(
     resumen_label_font = Font(name="Calibri", size=11, bold=True)
     resumen_value_font = Font(name="Calibri", size=11)
 
-    headers = [CAMPOS[c]["label"] for c in campos_sel]
-    ws.append(headers)
+    content_row = _insertar_logo(ws)
+    solo_resumen = not campos_sel and bool(resumenes_sel)
 
-    for col_num in range(1, len(headers) + 1):
-        cell = ws.cell(row=1, column=col_num)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = align_center
-        cell.border = border_thin
-
-    for row_data in rows:
-        values = [_valor_campo(row_data, c) for c in campos_sel]
-        ws.append(values)
-
-    data_end = ws.max_row
-
-    for row in ws.iter_rows(min_row=2, max_row=data_end, max_col=len(headers)):
-        for cell in row:
-            cell.border = border_thin
+    if not solo_resumen:
+        headers = [CAMPOS[c]["label"] for c in campos_sel]
+        for col_num, header in enumerate(headers, start=1):
+            cell = ws.cell(row=content_row, column=col_num, value=header)
+            cell.fill = header_fill
+            cell.font = header_font
             cell.alignment = align_center
+            cell.border = border_thin
 
-    # Resúmenes al final
+        for row_data in rows:
+            content_row += 1
+            for col_num, key in enumerate(campos_sel, start=1):
+                cell = ws.cell(row=content_row, column=col_num, value=_valor_campo(row_data, key))
+                cell.border = border_thin
+                cell.alignment = align_center
+
+        data_end = content_row
+        resumen_start = data_end + 2 if resumenes_sel else data_end
+    else:
+        resumen_start = content_row
+
     if resumenes_sel:
-        start = data_end + 2
-        ws.cell(row=start, column=1, value="RESUMEN DEL REPORTE").font = resumen_title_font
+        _escribir_resumenes(
+            ws,
+            resumen_start,
+            rows,
+            resumenes_sel,
+            border_thin,
+            resumen_fill,
+            resumen_title_font,
+            resumen_label_font,
+            resumen_value_font,
+        )
 
-        resumen_rows = _calcular_resumenes(rows, resumenes_sel)
-        for i, (label, value) in enumerate(resumen_rows):
-            r = start + 1 + i
-            cell_l = ws.cell(row=r, column=1, value=label)
-            cell_v = ws.cell(row=r, column=2, value=value)
-            cell_l.font = resumen_label_font
-            cell_v.font = resumen_value_font
-            cell_l.fill = resumen_fill
-            cell_v.fill = resumen_fill
-            cell_l.border = border_thin
-            cell_v.border = border_thin
+    max_col = max(ws.max_column or 1, 2)
+    for col_idx in range(1, max_col + 1):
+        max_len = 0
+        for row_idx in range(1, (ws.max_row or 1) + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if cell.value is not None:
+                max_len = max(max_len, len(str(cell.value)))
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        current = ws.column_dimensions[col_letter].width or 0
+        ws.column_dimensions[col_letter].width = max(current, max_len + 3, 14)
 
-    for col in ws.columns:
-        max_len = max(len(str(cell.value or "")) for cell in col)
-        col_letter = openpyxl.utils.get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 14)
+    # Ancho mínimo para logo / etiquetas de resumen
+    ws.column_dimensions["A"].width = max(ws.column_dimensions["A"].width or 0, 36)
+    ws.column_dimensions["B"].width = max(ws.column_dimensions["B"].width or 0, 18)
 
     stream = io.BytesIO()
     wb.save(stream)

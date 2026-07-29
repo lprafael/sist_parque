@@ -250,16 +250,19 @@ export default function ReportesPage() {
     setAñoHasta('')
   }
 
+  const puedeDescargar = camposSel.size > 0 || resumenesSel.size > 0
+
   const handleDescargar = async () => {
-    if (camposSel.size === 0) {
-      alert('Seleccioná al menos un campo para el reporte.')
+    if (!puedeDescargar) {
+      alert('Seleccioná al menos un campo del reporte o un resumen.')
       return
     }
     setDownloading(true)
     try {
-      const params: Record<string, string | number> = {
+      const params: Record<string, string | number | boolean> = {
         campos: Array.from(camposSel).join(','),
         resumenes: Array.from(resumenesSel).join(','),
+        solo_resumen: camposSel.size === 0,
       }
       if (empresasSel.length) params.empresas = empresasSel.join(',')
       if (estadoBus) params.estado_bus = estadoBus
@@ -301,7 +304,7 @@ export default function ReportesPage() {
         <button
           className="btn btn-primary"
           onClick={handleDescargar}
-          disabled={downloading || camposSel.size === 0}
+          disabled={downloading || !puedeDescargar}
         >
           <Download size={16} />
           <span>{downloading ? 'Generando Excel...' : 'Descargar Excel'}</span>
@@ -422,7 +425,7 @@ export default function ReportesPage() {
             <h2>Campos del reporte</h2>
           </div>
           <p className="report-section-hint">
-            Marcá las columnas que incluirá la planilla Excel.
+            Marcá las columnas del detalle. Si dejás todo vacío y solo marcás resúmenes, el Excel sale sin tabla de buses.
           </p>
           <CheckGroup items={campos} selected={camposSel} onChange={setCamposSel} />
         </div>
@@ -433,7 +436,7 @@ export default function ReportesPage() {
             <h2>Resúmenes al final</h2>
           </div>
           <p className="report-section-hint">
-            Indicadores que se agregarán debajo de la tabla de datos.
+            Indicadores del reporte. Si no marcás campos, el Excel sale solo con estos resúmenes.
           </p>
           <CheckGroup items={resumenes} selected={resumenesSel} onChange={setResumenesSel} />
 
@@ -441,14 +444,16 @@ export default function ReportesPage() {
             <button
               className="btn btn-primary btn-lg"
               onClick={handleDescargar}
-              disabled={downloading || camposSel.size === 0}
+              disabled={downloading || !puedeDescargar}
               style={{ width: '100%', justifyContent: 'center' }}
             >
               <Download size={18} />
               <span>{downloading ? 'Generando Excel...' : 'Descargar reporte Excel'}</span>
             </button>
             <p className="report-section-hint" style={{ textAlign: 'center', marginTop: 10, marginBottom: 0 }}>
-              {camposSel.size} columnas · {resumenesSel.size} resúmenes
+              {camposSel.size === 0 && resumenesSel.size > 0
+                ? `Solo resúmenes (${resumenesSel.size})`
+                : `${camposSel.size} columnas · ${resumenesSel.size} resúmenes`}
               {empresasSel.length > 0 ? ` · ${empresasSel.length} empresa(s)` : ' · todas las empresas'}
             </p>
           </div>

@@ -40,8 +40,19 @@ export const empresasApi = {
   listar: (params?: Record<string, string | number | boolean>) =>
     api.get('/empresas', { params }),
   obtener: (id_eot: string) => api.get(`/empresas/${id_eot}`),
-  busesDeEmpresa: (id_eot: string) => api.get(`/empresas/${id_eot}/buses`),
+  busesDeEmpresa: (
+    id_eot: string,
+    params?: { solo_activas?: boolean; a_fecha?: string },
+  ) => api.get(`/empresas/${id_eot}/buses`, { params }),
   asignarBus: (data: unknown) => api.post('/empresas/asignaciones', data),
+  bajaBus: (data: {
+    id_bus: number
+    fecha_fin: string
+    motivo?: 'BAJA' | 'SUSPENSION'
+    observaciones?: string
+  }) => api.post('/empresas/asignaciones/baja', data),
+  busesSinEmpresa: (params?: Record<string, string | number>) =>
+    api.get('/empresas/asignaciones/sin-empresa', { params }),
   historialBus: (id_bus: number) =>
     api.get(`/empresas/asignaciones/bus/${id_bus}`),
 }

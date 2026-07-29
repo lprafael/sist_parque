@@ -149,8 +149,10 @@ class BusOut(BusBase):
 
 
 # ============================================================
-# BUS-EMPRESA (Asignaciones)
+# BUS-EMPRESA (Asignaciones históricas bus ↔ EOT)
 # ============================================================
+
+MOTIVOS_ASIGNACION = ("ALTA", "TRANSFERENCIA", "BAJA", "SUSPENSION")
 
 class BusEmpresaBase(BaseModel):
     id_bus: int
@@ -158,10 +160,23 @@ class BusEmpresaBase(BaseModel):
     fecha_asignacion: date
     fecha_fin_asignacion: Optional[date] = None
     estado_asignacion: str = "ACTIVA"
+    motivo: Optional[str] = None
     observaciones: Optional[str] = None
 
-class BusEmpresaCreate(BusEmpresaBase):
-    pass
+class BusEmpresaCreate(BaseModel):
+    """Alta o transferencia: siempre crea asignación vigente (fecha_fin=null)."""
+    id_bus: int
+    id_eot: str
+    fecha_asignacion: date
+    motivo: Optional[str] = None  # ALTA | TRANSFERENCIA (auto si se omite)
+    observaciones: Optional[str] = None
+
+class BusEmpresaBaja(BaseModel):
+    """Baja o suspensión: cierra la asignación vigente sin pasar a otra EOT."""
+    id_bus: int
+    fecha_fin: date
+    motivo: str = "BAJA"  # BAJA | SUSPENSION
+    observaciones: Optional[str] = None
 
 class BusEmpresaOut(BusEmpresaBase):
     id_asignacion: int

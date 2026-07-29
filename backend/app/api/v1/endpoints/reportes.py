@@ -168,7 +168,7 @@ async def exportar_buses_excel(
         subq = (
             select(BusEmpresa.id_bus)
             .where(
-                BusEmpresa.estado_asignacion == "ACTIVA",
+                BusEmpresa.fecha_fin_asignacion.is_(None),
                 BusEmpresa.id_eot.in_(empresas_ids),
             )
         )
@@ -184,7 +184,7 @@ async def exportar_buses_excel(
     eot_ids = set()
     for b in buses:
         for a in b.asignaciones:
-            if a.estado_asignacion == "ACTIVA":
+            if a.fecha_fin_asignacion is None:
                 eot_ids.add(a.id_eot)
 
     eot_nombres: Dict[str, str] = {}
@@ -212,7 +212,7 @@ async def exportar_buses_excel(
         if estado_itv and estado != estado_itv.upper():
             continue
 
-        asig = next((a for a in b.asignaciones if a.estado_asignacion == "ACTIVA"), None)
+        asig = next((a for a in b.asignaciones if a.fecha_fin_asignacion is None), None)
         empresa_nombre = "-"
         if asig:
             empresa_nombre = eot_nombres.get(asig.id_eot) or asig.id_eot or "-"

@@ -136,7 +136,7 @@ async def distribucion_por_empresa(
             BusEmpresa.id_eot,
             func.count(BusEmpresa.id_bus).label("total_buses")
         )
-        .where(BusEmpresa.estado_asignacion == "ACTIVA")
+        .where(BusEmpresa.fecha_fin_asignacion.is_(None))
         .group_by(BusEmpresa.id_eot)
         .order_by(func.count(BusEmpresa.id_bus).desc())
     )

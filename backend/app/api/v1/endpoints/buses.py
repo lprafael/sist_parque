@@ -65,7 +65,7 @@ async def listar_buses(
             select(BusEmpresa.id_bus)
             .join(Eot, Eot.id_eot_vmt_hex == BusEmpresa.id_eot, isouter=True)
             .where(
-                BusEmpresa.estado_asignacion == "ACTIVA",
+                BusEmpresa.fecha_fin_asignacion.is_(None),
                 or_(
                     BusEmpresa.id_eot == empresa,
                     Eot.id_eot_vmt_hex == empresa,
@@ -98,14 +98,14 @@ async def listar_buses(
         emp_q = (
             select(Eot.eot_nombre, BusEmpresa.id_eot)
             .join(BusEmpresa, BusEmpresa.id_eot == Eot.id_eot_vmt_hex)
-            .where(BusEmpresa.id_bus == bus.id_bus, BusEmpresa.estado_asignacion == "ACTIVA")
+            .where(BusEmpresa.id_bus == bus.id_bus, BusEmpresa.fecha_fin_asignacion.is_(None))
             .limit(1)
         )
         emp_res = (await db.execute(emp_q)).one_or_none()
         if emp_res:
             empresa_nombre = emp_res[0] if emp_res[0] else emp_res[1]
         else:
-            emp_q_raw = select(BusEmpresa.id_eot).where(BusEmpresa.id_bus == bus.id_bus, BusEmpresa.estado_asignacion == "ACTIVA").limit(1)
+            emp_q_raw = select(BusEmpresa.id_eot).where(BusEmpresa.id_bus == bus.id_bus, BusEmpresa.fecha_fin_asignacion.is_(None)).limit(1)
             empresa_nombre = (await db.execute(emp_q_raw)).scalar_one_or_none()
 
         venc = itv.fecha_vencimiento if itv else None
@@ -165,7 +165,7 @@ async def obtener_bus(
     itv = sorted(bus.itv_registros, key=lambda x: x.fecha_vencimiento, reverse=True)
     venc = itv[0].fecha_vencimiento if itv else None
     empresa_act = next(
-        (a.id_eot for a in bus.asignaciones if a.estado_asignacion == "ACTIVA"), None
+        (a.id_eot for a in bus.asignaciones if a.fecha_fin_asignacion is None), None
     )
 
     return BusOut(

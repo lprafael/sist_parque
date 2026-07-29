@@ -7,7 +7,7 @@ documentos_bus, alertas, auditoria, auxiliar
 
 from sqlalchemy import (
     Column, Integer, String, Date, DateTime, Boolean,
-    Numeric, Text, ForeignKey, func
+    Numeric, Text, ForeignKey, Index, func, text
 )
 from sqlalchemy.dialects.postgresql import JSONB, INET
 from sqlalchemy.orm import relationship
@@ -187,19 +187,33 @@ class Bus(Base):
 
 
 class BusEmpresa(Base):
-    """Asignación histórica bus ↔ empresa operadora (id_eot del CID)."""
-    __tablename__ = "bus_empresa"
-    __table_args__ = {"schema": SCHEMA}
+    """Asignación histórica bus ↔ EOT (N:N temporal vía id_eot_vmt_hex).
 
-    id_asignacion       = Column(Integer, primary_key=True, index=True)
-    id_bus              = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"), nullable=False)
-    id_eot              = Column(String(255), nullable=False)   # ID en sistema CID/GTFS
-    fecha_asignacion    = Column(Date, nullable=False)
-    fecha_fin_asignacion = Column(Date)
-    estado_asignacion   = Column(String(20), default="ACTIVA")
-    observaciones       = Column(Text)
-    usuario_registro    = Column(String(100))
-    fecha_registro      = Column(DateTime, default=func.now())
+    Vigente = fecha_fin_asignacion IS NULL (y estado_asignacion = ACTIVA).
+    Un bus solo puede tener una asignación vigente a la vez.
+    """
+    __tablename__ = "bus_empresa"
+    __table_args__ = (
+        Index(
+            "uq_bus_empresa_vigente",
+            "id_bus",
+            unique=True,
+            postgresql_where=text("fecha_fin_asignacion IS NULL"),
+        ),
+        Index("ix_bus_empresa_eot_vigente", "id_eot", postgresql_where=text("fecha_fin_asignacion IS NULL")),
+        {"schema": SCHEMA},
+    )
+
+    id_asignacion        = Column(Integer, primary_key=True, index=True)
+    id_bus               = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"), nullable=False)
+    id_eot               = Column(String(255), nullable=False)   # → public.eots.id_eot_vmt_hex
+    fecha_asignacion     = Column(Date, nullable=False)
+    fecha_fin_asignacion = Column(Date)   # NULL = sigue asignado a esa EOT
+    estado_asignacion    = Column(String(20), default="ACTIVA")  # ACTIVA | CERRADA
+    motivo               = Column(String(30))  # ALTA | TRANSFERENCIA | BAJA | SUSPENSION
+    observaciones        = Column(Text)
+    usuario_registro     = Column(String(100))
+    fecha_registro       = Column(DateTime, default=func.now())
 
     bus = relationship("Bus", back_populates="asignaciones")
 

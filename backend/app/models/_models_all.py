@@ -94,19 +94,20 @@ class Bus(Base):
 
 
 class BusEmpresa(Base):
-    """Asignación histórica bus ↔ empresa operadora (id_eot del CID)."""
+    """Asignación histórica bus ↔ EOT (N:N temporal vía id_eot_vmt_hex)."""
     __tablename__ = "bus_empresa"
     __table_args__ = {"schema": SCHEMA}
 
-    id_asignacion       = Column(Integer, primary_key=True, index=True)
-    id_bus              = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"), nullable=False)
-    id_eot              = Column(String(255), nullable=False)   # ID en sistema CID/GTFS
-    fecha_asignacion    = Column(Date, nullable=False)
+    id_asignacion        = Column(Integer, primary_key=True, index=True)
+    id_bus               = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"), nullable=False)
+    id_eot               = Column(String(255), nullable=False)
+    fecha_asignacion     = Column(Date, nullable=False)
     fecha_fin_asignacion = Column(Date)
-    estado_asignacion   = Column(String(20), default="ACTIVA")
-    observaciones       = Column(Text)
-    usuario_registro    = Column(String(100))
-    fecha_registro      = Column(DateTime, default=func.now())
+    estado_asignacion    = Column(String(20), default="ACTIVA")
+    motivo               = Column(String(30))
+    observaciones        = Column(Text)
+    usuario_registro     = Column(String(100))
+    fecha_registro       = Column(DateTime, default=func.now())
 
     bus = relationship("Bus", back_populates="asignaciones")
 

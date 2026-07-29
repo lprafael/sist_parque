@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import require_roles
-from app.services.itv_excel import apply_import, build_preview
+from app.services.itv_excel import apply_import, build_preview, sincronizar_estado_desde_excel
 
 router = APIRouter(prefix="/importador", tags=["Importador"])
 
@@ -128,6 +128,44 @@ async def aplicar_excel(
             f"Importación aplicada: {result.buses_actualizados} buses actualizados, "
             f"{result.buses_creados} creados, {result.itv_insertados} ITV nuevas, "
             f"{result.seguros_insertados} seguros."
+        ),
+    }
+
+
+@router.post("/sincronizar-estado")
+async def sincronizar_estado_excel(
+    file: UploadFile = File(...),
+    inactivar_fuera: str = Form("true"),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
+):
+    """
+    Recuperación: solo alinea ACTIVO/INACTIVO según RUA/chasis del Excel.
+    No toca ITV ni seguros.
+    """
+    contents = await _read_xlsx(file)
+    inactivar = str(inactivar_fuera).strip().lower() in ("1", "true", "yes", "si", "sí")
+    try:
+        result = await sincronizar_estado_desde_excel(
+            db, contents, inactivar_fuera=inactivar
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al sincronizar estados: {exc}",
+        ) from exc
+
+    return {
+        "status": "estado_sincronizado",
+        "filename": file.filename,
+        "buses_activados": result.buses_activados,
+        "buses_inactivados": result.buses_inactivados,
+        "mensaje": (
+            f"Estados alineados: {result.buses_activados} activados, "
+            f"{result.buses_inactivados} inactivados."
         ),
     }
 

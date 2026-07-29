@@ -129,6 +129,11 @@ export const importadorApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 300000,
     }),
+  sincronizarEstado: (formData: FormData) =>
+    api.post('/importador/sincronizar-estado', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 300000,
+    }),
   /** @deprecated usar preview */
   uploadExcel: (formData: FormData) =>
     api.post('/importador/preview', formData, {

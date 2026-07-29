@@ -46,7 +46,7 @@ export default function ImportadorPage() {
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [applyResult, setApplyResult] = useState<ApplyData | null>(null)
   const [error, setError] = useState('')
-  const [sincronizarEstado, setSincronizarEstado] = useState(true)
+  const [sincronizarEstado, setSincronizarEstado] = useState(false)
   const [crearFaltantes, setCrearFaltantes] = useState(true)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -100,6 +100,41 @@ export default function ImportadorPage() {
       setApplyResult(res.data)
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al aplicar la importación.')
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  const handleSoloEstado = async () => {
+    if (!file) return
+    const ok = window.confirm(
+      '¿Solo sincronizar ACTIVO/INACTIVO según el Excel?\n\n' +
+        'No modifica ITV ni seguros. Útil para recuperar buses mal inactivados.',
+    )
+    if (!ok) return
+    setApplying(true)
+    setError('')
+    setApplyResult(null)
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('inactivar_fuera', String(sincronizarEstado))
+    try {
+      const res = await importadorApi.sincronizarEstado(formData)
+      setApplyResult({
+        status: res.data.status,
+        mensaje: res.data.mensaje,
+        buses_creados: 0,
+        buses_actualizados: 0,
+        buses_activados: res.data.buses_activados,
+        buses_inactivados: res.data.buses_inactivados,
+        itv_insertados: 0,
+        itv_sin_cambio: 0,
+        seguros_insertados: 0,
+        auxiliar_filas: 0,
+        errores: [],
+      })
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Error al sincronizar estados.')
     } finally {
       setApplying(false)
     }
@@ -249,15 +284,28 @@ export default function ImportadorPage() {
               </label>
             </div>
 
-            <button
-              className="btn btn-primary"
-              onClick={handleAplicar}
-              disabled={applying || loading}
-              style={{ width: '100%' }}
-            >
-              <Play size={16} />
-              <span>{applying ? 'Aplicando importación...' : 'Confirmar y aplicar a la base'}</span>
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              <button
+                className="btn btn-primary"
+                onClick={handleAplicar}
+                disabled={applying || loading}
+                style={{ width: '100%' }}
+              >
+                <Play size={16} />
+                <span>{applying ? 'Aplicando importación...' : 'Confirmar y aplicar a la base'}</span>
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={handleSoloEstado}
+                disabled={applying || loading || !file}
+                style={{ width: '100%' }}
+              >
+                <span>Solo recuperar ACTIVO/INACTIVO (sin tocar ITV)</span>
+              </button>
+            </div>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
+              Si una importación anterior inactivó de más, usá el botón de recuperación con el mismo Excel.
+            </p>
           </div>
         )}
 

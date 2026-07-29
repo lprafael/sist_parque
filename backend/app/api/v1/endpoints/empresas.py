@@ -18,9 +18,10 @@ from sqlalchemy import select, func, and_, or_
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import Eot, BusEmpresa, Bus
+from app.models import Eot, BusEmpresa, Bus, DocumentoEot
 from app.schemas import (
     EotOut, BusEmpresaCreate, BusEmpresaBaja, BusEmpresaOut, MOTIVOS_ASIGNACION,
+    DocumentoEotCreate, DocumentoEotUpdate, DocumentoEotOut, TIPOS_DOCUMENTO_EOT,
 )
 
 router = APIRouter(prefix="/empresas", tags=["Empresas (EOT)"])
@@ -267,6 +268,7 @@ async def asignar_bus_empresa(
         fecha_fin_asignacion=None,
         estado_asignacion="ACTIVA",
         motivo=motivo,
+        normativa=body.normativa,
         observaciones=body.observaciones,
         usuario_registro=user.username,
     )
@@ -313,6 +315,8 @@ async def baja_bus_empresa(
     asig_activa.fecha_fin_asignacion = body.fecha_fin
     asig_activa.estado_asignacion = "CERRADA"
     asig_activa.motivo = motivo
+    if body.normativa:
+        asig_activa.normativa = body.normativa
     if body.observaciones:
         nota = body.observaciones
         asig_activa.observaciones = (
@@ -380,3 +384,145 @@ async def historial_asignaciones_bus(
     )).scalars().all()
 
     return [await _enriquecer_asignacion(db, asig) for asig in asignaciones]
+
+
+# ── Documentación de parque por EOT ─────────────────────────
+
+async def _enriquecer_doc_eot(db: AsyncSession, doc: DocumentoEot) -> DocumentoEotOut:
+    eot = (await db.execute(
+        select(Eot).where(Eot.id_eot_vmt_hex == doc.id_eot)
+    )).scalar_one_or_none()
+    return DocumentoEotOut(
+        **{c.name: getattr(doc, c.name) for c in DocumentoEot.__table__.columns},
+        empresa_nombre=eot.eot_nombre if eot else None,
+    )
+
+
+@router.get(
+    "/{id_eot_vmt_hex}/documentos",
+    response_model=list[DocumentoEotOut],
+    summary="Documentos de habilitación/aumento/disminución de una EOT",
+)
+async def listar_documentos_eot(
+    id_eot_vmt_hex: str,
+    tipo_documento: Optional[str] = Query(None, description="HABILITACION | AUMENTO | DISMINUCION"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    eot = (await db.execute(
+        select(Eot).where(Eot.id_eot_vmt_hex == id_eot_vmt_hex)
+    )).scalar_one_or_none()
+    if not eot:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada")
+
+    q = select(DocumentoEot).where(DocumentoEot.id_eot == id_eot_vmt_hex)
+    if tipo_documento:
+        tipo = tipo_documento.upper()
+        if tipo not in TIPOS_DOCUMENTO_EOT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"tipo_documento inválido. Valores: {', '.join(TIPOS_DOCUMENTO_EOT)}",
+            )
+        q = q.where(DocumentoEot.tipo_documento == tipo)
+
+    docs = (await db.execute(
+        q.order_by(DocumentoEot.fecha_emision.desc().nullslast(), DocumentoEot.id_documento_eot.desc())
+    )).scalars().all()
+    return [await _enriquecer_doc_eot(db, d) for d in docs]
+
+
+@router.post(
+    "/documentos",
+    response_model=DocumentoEotOut,
+    status_code=201,
+    summary="Registrar documento de parque para una EOT",
+)
+async def crear_documento_eot(
+    body: DocumentoEotCreate,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_roles("ADMIN", "SUPERVISOR", "OPERADOR")),
+):
+    tipo = body.tipo_documento.upper()
+    if tipo not in TIPOS_DOCUMENTO_EOT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"tipo_documento inválido. Valores: {', '.join(TIPOS_DOCUMENTO_EOT)}",
+        )
+
+    eot = (await db.execute(
+        select(Eot).where(Eot.id_eot_vmt_hex == body.id_eot)
+    )).scalar_one_or_none()
+    if not eot:
+        raise HTTPException(status_code=404, detail="Empresa no encontrada en public.eots")
+
+    doc = DocumentoEot(
+        id_eot=body.id_eot,
+        tipo_documento=tipo,
+        numero_resolucion=body.numero_resolucion,
+        nombre_documento=body.nombre_documento,
+        fecha_emision=body.fecha_emision,
+        fecha_vigencia=body.fecha_vigencia,
+        cantidad_buses=body.cantidad_buses,
+        archivo_url=body.archivo_url,
+        observaciones=body.observaciones,
+        usuario_registro=user.username,
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+    return await _enriquecer_doc_eot(db, doc)
+
+
+@router.put(
+    "/documentos/{id_documento_eot}",
+    response_model=DocumentoEotOut,
+    summary="Actualizar documento de parque de una EOT",
+)
+async def actualizar_documento_eot(
+    id_documento_eot: int,
+    body: DocumentoEotUpdate,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_roles("ADMIN", "SUPERVISOR", "OPERADOR")),
+):
+    doc = (await db.execute(
+        select(DocumentoEot).where(DocumentoEot.id_documento_eot == id_documento_eot)
+    )).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+    data = body.model_dump(exclude_unset=True)
+    if "tipo_documento" in data and data["tipo_documento"] is not None:
+        tipo = data["tipo_documento"].upper()
+        if tipo not in TIPOS_DOCUMENTO_EOT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"tipo_documento inválido. Valores: {', '.join(TIPOS_DOCUMENTO_EOT)}",
+            )
+        data["tipo_documento"] = tipo
+
+    for k, v in data.items():
+        setattr(doc, k, v)
+
+    await db.commit()
+    await db.refresh(doc)
+    return await _enriquecer_doc_eot(db, doc)
+
+
+@router.delete(
+    "/documentos/{id_documento_eot}",
+    status_code=204,
+    summary="Eliminar documento de parque de una EOT",
+)
+async def eliminar_documento_eot(
+    id_documento_eot: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(require_roles("ADMIN", "SUPERVISOR")),
+):
+    doc = (await db.execute(
+        select(DocumentoEot).where(DocumentoEot.id_documento_eot == id_documento_eot)
+    )).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    await db.delete(doc)
+    await db.commit()
+    return None

@@ -33,6 +33,7 @@ export const busesApi = {
   marcas: () => api.get('/buses/catalogo/marcas'),
   tiposCarroceria: () => api.get('/buses/catalogo/tipos-carroceria'),
   marcasCarroceria: () => api.get('/buses/catalogo/marcas-carroceria'),
+  tiposBus: () => api.get('/buses/catalogo/tipos-bus'),
 }
 
 // ── Empresas (EOT - read-only) ────────────────────
@@ -55,6 +56,12 @@ export const empresasApi = {
     api.get('/empresas/asignaciones/sin-empresa', { params }),
   historialBus: (id_bus: number) =>
     api.get(`/empresas/asignaciones/bus/${id_bus}`),
+  listarDocumentosEot: (id_eot: string, params?: { tipo_documento?: string }) =>
+    api.get(`/empresas/${id_eot}/documentos`, { params }),
+  crearDocumentoEot: (data: unknown) => api.post('/empresas/documentos', data),
+  actualizarDocumentoEot: (id: number, data: unknown) =>
+    api.put(`/empresas/documentos/${id}`, data),
+  eliminarDocumentoEot: (id: number) => api.delete(`/empresas/documentos/${id}`),
 }
 
 // ── ITV ───────────────────────────────────────────
@@ -74,6 +81,7 @@ export const segurosApi = {
   crear: (data: unknown) => api.post('/seguros', data),
   actualizar: (id: number, data: unknown) => api.put(`/seguros/${id}`, data),
   companias: () => api.get('/seguros/companias'),
+  tipos: () => api.get('/seguros/tipos'),
   crearCompania: (data: unknown) => api.post('/seguros/companias', data),
 }
 

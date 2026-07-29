@@ -6,10 +6,10 @@ from sqlalchemy import select, func, and_
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import SeguroBus, CompaniaSeguro, Bus, Auditoria
+from app.models import SeguroBus, CompaniaSeguro, TipoSeguro, Bus, Auditoria
 from app.schemas import (
     SeguroBusCreate, SeguroBusUpdate, SeguroBusOut,
-    CompaniaSeguroCreate, CompaniaSeguroOut
+    CompaniaSeguroCreate, CompaniaSeguroOut, TipoSeguroOut
 )
 
 router = APIRouter(prefix="/seguros", tags=["Seguros"])
@@ -47,6 +47,14 @@ async def crear_compania(
     return comp
 
 
+@router.get("/tipos", response_model=list[TipoSeguroOut])
+async def listar_tipos_seguro(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
+    result = await db.execute(
+        select(TipoSeguro).where(TipoSeguro.activo == True).order_by(TipoSeguro.nombre)
+    )
+    return result.scalars().all()
+
+
 # --- Seguros de buses ---
 
 @router.get("", response_model=dict)
@@ -78,14 +86,20 @@ async def listar_seguros(
         est, dias = estado_seguro(seg.fecha_vencimiento)
         if estado and est != estado.upper():
             continue
-        # Nombre compañía
+        # Nombre compañía / tipo
         comp = None
         if seg.id_compania:
             comp = (await db.execute(select(CompaniaSeguro.nombre).where(CompaniaSeguro.id_compania == seg.id_compania))).scalar_one_or_none()
+        tipo_nombre = None
+        if seg.id_tipo_seguro:
+            tipo_nombre = (await db.execute(
+                select(TipoSeguro.nombre).where(TipoSeguro.id_tipo_seguro == seg.id_tipo_seguro)
+            )).scalar_one_or_none()
         items.append(SeguroBusOut(
             **{c.name: getattr(seg, c.name) for c in SeguroBus.__table__.columns},
             dias_para_vencer=dias,
             compania_nombre=comp,
+            tipo_seguro_nombre=tipo_nombre or seg.tipo_seguro,
         ))
 
     return {"total": total, "page": page, "page_size": page_size, "items": items}
@@ -101,7 +115,23 @@ async def crear_seguro(
     if not bus:
         raise HTTPException(status_code=404, detail="Bus no encontrado")
 
-    seg = SeguroBus(**body.model_dump())
+    data = body.model_dump()
+    # Resolver id_tipo_seguro ↔ tipo_seguro (legado)
+    if data.get("id_tipo_seguro") and not data.get("tipo_seguro"):
+        nombre = (await db.execute(
+            select(TipoSeguro.nombre).where(TipoSeguro.id_tipo_seguro == data["id_tipo_seguro"])
+        )).scalar_one_or_none()
+        if nombre:
+            data["tipo_seguro"] = nombre
+    elif data.get("tipo_seguro") and not data.get("id_tipo_seguro"):
+        tid = (await db.execute(
+            select(TipoSeguro.id_tipo_seguro).where(TipoSeguro.nombre == data["tipo_seguro"].upper())
+        )).scalar_one_or_none()
+        if tid:
+            data["id_tipo_seguro"] = tid
+            data["tipo_seguro"] = data["tipo_seguro"].upper()
+
+    seg = SeguroBus(**data)
     db.add(seg)
     db.add(Auditoria(tabla_afectada="seguros_bus", id_registro=body.id_bus, accion="INSERT",
                      datos_nuevos=body.model_dump(mode="json"), usuario=user.username))

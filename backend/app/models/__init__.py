@@ -1,13 +1,13 @@
 """
 Modelos ORM SQLAlchemy — mapeados al schema registro_habilitacion de PostgreSQL.
-Tablas existentes: usuarios, buses, marcas, marcas_carroceria, tipos_carroceria,
-bus_empresa, itv_bus, historial_itv, seguros_bus, companias_seguros,
-documentos_bus, alertas, auditoria, auxiliar
+Tablas: usuarios(sistema), buses, marcas, marcas_carroceria, tipos_carroceria,
+tipos_bus, bus_empresa, itv_bus, seguros_bus, tipos_seguro, companias_seguros,
+documentos_bus, documentos_eot, alertas, auditoria, auxiliar
 """
 
 from sqlalchemy import (
     Column, Integer, String, Date, DateTime, Boolean,
-    Numeric, Text, ForeignKey, Index, func, text
+    Numeric, Text, ForeignKey, Index, CheckConstraint, func, text
 )
 from sqlalchemy.dialects.postgresql import JSONB, INET
 from sqlalchemy.orm import relationship
@@ -154,6 +154,19 @@ class TipoCarroceria(Base):
     buses = relationship("Bus", back_populates="tipo_carroceria")
 
 
+class TipoBus(Base):
+    """Catálogo de tipo de bus / servicio (CONVENCIONAL, DIFERENCIADO, ...)."""
+    __tablename__ = "tipos_bus"
+    __table_args__ = {"schema": SCHEMA}
+
+    id_tipo_bus = Column(Integer, primary_key=True, index=True)
+    nombre      = Column(String(100), nullable=False, unique=True)
+    descripcion = Column(String(200))
+    activo      = Column(Boolean, default=True)
+
+    buses = relationship("Bus", back_populates="tipo_bus")
+
+
 class Bus(Base):
     __tablename__ = "buses"
     __table_args__ = {"schema": SCHEMA}
@@ -166,24 +179,26 @@ class Bus(Base):
     rua                 = Column(String(20), unique=True, nullable=False, index=True)
     id_tipo_carroceria  = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_carroceria.id_tipo"))
     id_marca_carroceria = Column(Integer, ForeignKey(f"{SCHEMA}.marcas_carroceria.id_marca_carroceria"))
+    id_tipo_bus         = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_bus.id_tipo_bus"))
     capacidad_pasajeros = Column(Integer)
     combustible         = Column(String(50))
     cilindrada          = Column(String(20))
     color               = Column(String(50))
-    tipo_servicio       = Column(String(50))
+    tipo_servicio       = Column(String(50))  # legado; preferir id_tipo_bus
     estado_bus          = Column(String(20), default="ACTIVO")
     fecha_registro      = Column(DateTime, default=func.now())
     fecha_modificacion  = Column(DateTime, default=func.now(), onupdate=func.now())
 
     # Relaciones
-    marca           = relationship("Marca", back_populates="buses")
-    tipo_carroceria = relationship("TipoCarroceria", back_populates="buses")
+    marca            = relationship("Marca", back_populates="buses")
+    tipo_carroceria  = relationship("TipoCarroceria", back_populates="buses")
     marca_carroceria = relationship("MarcaCarroceria", back_populates="buses")
-    asignaciones    = relationship("BusEmpresa", back_populates="bus")
-    itv_registros   = relationship("ItvBus", back_populates="bus")
-    seguros         = relationship("SeguroBus", back_populates="bus")
-    documentos      = relationship("DocumentoBus", back_populates="bus")
-    alertas         = relationship("Alerta", back_populates="bus")
+    tipo_bus         = relationship("TipoBus", back_populates="buses")
+    asignaciones     = relationship("BusEmpresa", back_populates="bus")
+    itv_registros    = relationship("ItvBus", back_populates="bus")
+    seguros          = relationship("SeguroBus", back_populates="bus")
+    documentos       = relationship("DocumentoBus", back_populates="bus")
+    alertas          = relationship("Alerta", back_populates="bus")
 
 
 class BusEmpresa(Base):
@@ -211,6 +226,7 @@ class BusEmpresa(Base):
     fecha_fin_asignacion = Column(Date)   # NULL = sigue asignado a esa EOT
     estado_asignacion    = Column(String(20), default="ACTIVA")  # ACTIVA | CERRADA
     motivo               = Column(String(30))  # ALTA | TRANSFERENCIA | BAJA | SUSPENSION
+    normativa            = Column(Text)        # referencia normativa / resolución
     observaciones        = Column(Text)
     usuario_registro     = Column(String(100))
     fecha_registro       = Column(DateTime, default=func.now())
@@ -242,16 +258,29 @@ class CompaniaSeguro(Base):
     __tablename__ = "companias_seguros"
     __table_args__ = {"schema": SCHEMA}
 
-    id_compania  = Column(Integer, primary_key=True, index=True)
-    nombre       = Column(String(200), nullable=False)
-    ruc          = Column(String(20))
-    direccion    = Column(Text)
-    telefono     = Column(String(20))
-    email        = Column(String(100))
+    id_compania    = Column(Integer, primary_key=True, index=True)
+    nombre         = Column(String(200), nullable=False)
+    ruc            = Column(String(20))
+    direccion      = Column(Text)
+    telefono       = Column(String(20))
+    email          = Column(String(100))
     fecha_creacion = Column(DateTime(timezone=True))
-    activo       = Column(Boolean)
+    activo         = Column(Boolean)
 
     seguros = relationship("SeguroBus", back_populates="compania")
+
+
+class TipoSeguro(Base):
+    """Catálogo de tipo de seguro (PASAJEROS, TERCEROS, ...)."""
+    __tablename__ = "tipos_seguro"
+    __table_args__ = {"schema": SCHEMA}
+
+    id_tipo_seguro = Column(Integer, primary_key=True, index=True)
+    nombre         = Column(String(50), nullable=False, unique=True)
+    descripcion    = Column(String(200))
+    activo         = Column(Boolean, default=True)
+
+    seguros = relationship("SeguroBus", back_populates="tipo")
 
 
 class SeguroBus(Base):
@@ -260,7 +289,8 @@ class SeguroBus(Base):
 
     id_seguro           = Column(Integer, primary_key=True, index=True)
     id_bus              = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"))
-    tipo_seguro         = Column(String(50))       # PASAJEROS / TERCEROS
+    tipo_seguro         = Column(String(50))  # legado; preferir id_tipo_seguro
+    id_tipo_seguro      = Column(Integer, ForeignKey(f"{SCHEMA}.tipos_seguro.id_tipo_seguro"))
     id_compania         = Column(Integer, ForeignKey(f"{SCHEMA}.companias_seguros.id_compania"))
     numero_poliza       = Column(String(100))
     fecha_inicio        = Column(Date, nullable=False)
@@ -273,6 +303,7 @@ class SeguroBus(Base):
 
     bus      = relationship("Bus", back_populates="seguros")
     compania = relationship("CompaniaSeguro", back_populates="seguros")
+    tipo     = relationship("TipoSeguro", back_populates="seguros")
 
 
 class DocumentoBus(Base):
@@ -291,6 +322,31 @@ class DocumentoBus(Base):
     fecha_registro    = Column(DateTime, default=func.now())
 
     bus = relationship("Bus", back_populates="documentos")
+
+
+class DocumentoEot(Base):
+    """Documentación que habilita / modifica el parque de una EOT."""
+    __tablename__ = "documentos_eot"
+    __table_args__ = (
+        CheckConstraint(
+            "tipo_documento IN ('HABILITACION', 'AUMENTO', 'DISMINUCION')",
+            name="chk_documentos_eot_tipo",
+        ),
+        {"schema": SCHEMA},
+    )
+
+    id_documento_eot  = Column(Integer, primary_key=True, index=True)
+    id_eot            = Column(String(255), nullable=False, index=True)  # public.eots.id_eot_vmt_hex
+    tipo_documento    = Column(String(30), nullable=False)  # HABILITACION | AUMENTO | DISMINUCION
+    numero_resolucion = Column(String(100))
+    nombre_documento  = Column(String(200))
+    fecha_emision     = Column(Date)
+    fecha_vigencia    = Column(Date)
+    cantidad_buses    = Column(Integer)
+    archivo_url       = Column(String(500))
+    observaciones     = Column(Text)
+    usuario_registro  = Column(String(100))
+    fecha_registro    = Column(DateTime, default=func.now())
 
 
 class Alerta(Base):

@@ -96,6 +96,22 @@ class TipoCarroceriaOut(BaseModel):
     class Config:
         from_attributes = True
 
+class TipoBusOut(BaseModel):
+    id_tipo_bus: int
+    nombre: str
+    descripcion: Optional[str] = None
+    activo: Optional[bool] = True
+    class Config:
+        from_attributes = True
+
+class TipoSeguroOut(BaseModel):
+    id_tipo_seguro: int
+    nombre: str
+    descripcion: Optional[str] = None
+    activo: Optional[bool] = True
+    class Config:
+        from_attributes = True
+
 
 # ============================================================
 # BUSES
@@ -109,10 +125,12 @@ class BusBase(BaseModel):
     rua: str
     id_tipo_carroceria: Optional[int] = None
     id_marca_carroceria: Optional[int] = None
+    id_tipo_bus: Optional[int] = None
     capacidad_pasajeros: Optional[int] = None
     combustible: Optional[str] = None
     cilindrada: Optional[str] = None
     color: Optional[str] = None
+    tipo_servicio: Optional[str] = None  # legado
     estado_bus: str = "ACTIVO"
 
 class BusCreate(BusBase):
@@ -126,10 +144,12 @@ class BusUpdate(BaseModel):
     rua: Optional[str] = None
     id_tipo_carroceria: Optional[int] = None
     id_marca_carroceria: Optional[int] = None
+    id_tipo_bus: Optional[int] = None
     capacidad_pasajeros: Optional[int] = None
     combustible: Optional[str] = None
     cilindrada: Optional[str] = None
     color: Optional[str] = None
+    tipo_servicio: Optional[str] = None
     estado_bus: Optional[str] = None
 
 class BusOut(BusBase):
@@ -140,6 +160,7 @@ class BusOut(BusBase):
     marca_nombre: Optional[str] = None
     tipo_carroceria_nombre: Optional[str] = None
     marca_carroceria_nombre: Optional[str] = None
+    tipo_bus_nombre: Optional[str] = None
     empresa_actual: Optional[str] = None
     itv_vencimiento: Optional[date] = None
     itv_estado: Optional[str] = None
@@ -153,6 +174,7 @@ class BusOut(BusBase):
 # ============================================================
 
 MOTIVOS_ASIGNACION = ("ALTA", "TRANSFERENCIA", "BAJA", "SUSPENSION")
+TIPOS_DOCUMENTO_EOT = ("HABILITACION", "AUMENTO", "DISMINUCION")
 
 class BusEmpresaBase(BaseModel):
     id_bus: int
@@ -161,6 +183,7 @@ class BusEmpresaBase(BaseModel):
     fecha_fin_asignacion: Optional[date] = None
     estado_asignacion: str = "ACTIVA"
     motivo: Optional[str] = None
+    normativa: Optional[str] = None
     observaciones: Optional[str] = None
 
 class BusEmpresaCreate(BaseModel):
@@ -169,6 +192,7 @@ class BusEmpresaCreate(BaseModel):
     id_eot: str
     fecha_asignacion: date
     motivo: Optional[str] = None  # ALTA | TRANSFERENCIA (auto si se omite)
+    normativa: Optional[str] = None
     observaciones: Optional[str] = None
 
 class BusEmpresaBaja(BaseModel):
@@ -176,6 +200,7 @@ class BusEmpresaBaja(BaseModel):
     id_bus: int
     fecha_fin: date
     motivo: str = "BAJA"  # BAJA | SUSPENSION
+    normativa: Optional[str] = None
     observaciones: Optional[str] = None
 
 class BusEmpresaOut(BusEmpresaBase):
@@ -262,7 +287,8 @@ class CompaniaSeguroCreate(BaseModel):
 
 class SeguroBusBase(BaseModel):
     id_bus: int
-    tipo_seguro: str       # PASAJEROS / TERCEROS
+    tipo_seguro: Optional[str] = None       # legado PASAJEROS / TERCEROS
+    id_tipo_seguro: Optional[int] = None
     id_compania: Optional[int] = None
     numero_poliza: Optional[str] = None
     fecha_inicio: date
@@ -275,6 +301,7 @@ class SeguroBusCreate(SeguroBusBase):
 
 class SeguroBusUpdate(BaseModel):
     tipo_seguro: Optional[str] = None
+    id_tipo_seguro: Optional[int] = None
     id_compania: Optional[int] = None
     numero_poliza: Optional[str] = None
     fecha_inicio: Optional[date] = None
@@ -288,6 +315,7 @@ class SeguroBusOut(SeguroBusBase):
     estado_seguro: str
     dias_para_vencer: Optional[int] = None
     compania_nombre: Optional[str] = None
+    tipo_seguro_nombre: Optional[str] = None
     fecha_registro: Optional[datetime] = None
     class Config:
         from_attributes = True
@@ -310,6 +338,36 @@ class DocumentoBusOut(DocumentoBusCreate):
     estado_documento: Optional[str] = None
     archivo_url: Optional[str] = None
     fecha_registro: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+
+class DocumentoEotCreate(BaseModel):
+    id_eot: str
+    tipo_documento: str  # HABILITACION | AUMENTO | DISMINUCION
+    numero_resolucion: Optional[str] = None
+    nombre_documento: Optional[str] = None
+    fecha_emision: Optional[date] = None
+    fecha_vigencia: Optional[date] = None
+    cantidad_buses: Optional[int] = None
+    archivo_url: Optional[str] = None
+    observaciones: Optional[str] = None
+
+class DocumentoEotUpdate(BaseModel):
+    tipo_documento: Optional[str] = None
+    numero_resolucion: Optional[str] = None
+    nombre_documento: Optional[str] = None
+    fecha_emision: Optional[date] = None
+    fecha_vigencia: Optional[date] = None
+    cantidad_buses: Optional[int] = None
+    archivo_url: Optional[str] = None
+    observaciones: Optional[str] = None
+
+class DocumentoEotOut(DocumentoEotCreate):
+    id_documento_eot: int
+    usuario_registro: Optional[str] = None
+    fecha_registro: Optional[datetime] = None
+    empresa_nombre: Optional[str] = None
     class Config:
         from_attributes = True
 

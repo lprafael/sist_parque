@@ -5,6 +5,7 @@ import {
   ChevronDown, X, CheckSquare, Square,
 } from 'lucide-react'
 import { reportesApi, empresasApi, busesApi } from '../api'
+import PlanillaTabs from '../components/reportes/PlanillaTabs'
 
 const CAMPOS_DEFAULT = [
   { key: 'id_bus', label: 'N° ID', default: true },
@@ -199,6 +200,7 @@ function CheckGroup({
 }
 
 export default function ReportesPage() {
+  const [vista, setVista] = useState<'constructor' | 'planilla'>('planilla')
   const [downloading, setDownloading] = useState(false)
   const [empresasSel, setEmpresasSel] = useState<string[]>([])
   const [estadoBus, setEstadoBus] = useState('')
@@ -304,19 +306,46 @@ export default function ReportesPage() {
         <div>
           <h1 className="page-header-title">Centro de Reportes</h1>
           <p className="page-header-sub">
-            Armá un reporte personalizado: filtrá, elegí columnas y resúmenes, y descargá en Excel
+            {vista === 'planilla'
+              ? 'Pestañas de la planilla ITV: CUADRO DE EDAD, BAJAS, operativos, inclusivos…'
+              : 'Armá un reporte personalizado: filtrá, elegí columnas y resúmenes, y descargá en Excel'}
           </p>
         </div>
+        {vista === 'constructor' && (
+          <button
+            className="btn btn-primary"
+            onClick={handleDescargar}
+            disabled={downloading || !puedeDescargar}
+          >
+            <Download size={16} />
+            <span>{downloading ? 'Generando Excel...' : 'Descargar Excel'}</span>
+          </button>
+        )}
+      </div>
+
+      <div className="report-tabs report-tabs-main" role="tablist" style={{ marginBottom: 16 }}>
         <button
-          className="btn btn-primary"
-          onClick={handleDescargar}
-          disabled={downloading || !puedeDescargar}
+          type="button"
+          role="tab"
+          className={`report-tab ${vista === 'planilla' ? 'active' : ''}`}
+          onClick={() => setVista('planilla')}
         >
-          <Download size={16} />
-          <span>{downloading ? 'Generando Excel...' : 'Descargar Excel'}</span>
+          Planilla ITV
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className={`report-tab ${vista === 'constructor' ? 'active' : ''}`}
+          onClick={() => setVista('constructor')}
+        >
+          Constructor Excel
         </button>
       </div>
 
+      {vista === 'planilla' ? (
+        <PlanillaTabs />
+      ) : (
+      <>
       {/* 1) Filtros */}
       <div className="card report-section" style={{ marginBottom: 20 }}>
         <div className="report-section-header">
@@ -465,6 +494,8 @@ export default function ReportesPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }

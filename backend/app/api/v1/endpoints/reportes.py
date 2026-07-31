@@ -6,16 +6,17 @@ from typing import Optional, List, Dict, Any, Callable
 import openpyxl
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_roles
 from app.models import Bus, BusEmpresa, Eot, TipoServicio
 from app.api.v1.endpoints.buses import calcular_estado_itv
+from app.services import planilla_viewer
 
 router = APIRouter(prefix="/reportes", tags=["Reportes"])
 
@@ -379,3 +380,67 @@ async def exportar_buses_excel(
         headers={"Content-Disposition": 'attachment; filename="Parque_Automotor_VMT.xlsx"'},
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+
+
+# ── Planilla ITV (hojas tipo Excel) ─────────────────────────
+
+@router.get("/planilla/estado")
+async def planilla_estado(_=Depends(get_current_user)):
+    """Indica si hay una planilla ITV disponible para las pestañas."""
+    return planilla_viewer.estado_planilla()
+
+
+@router.get("/planilla/hojas")
+async def planilla_hojas(_=Depends(get_current_user)):
+    """Lista las hojas de la planilla cargada (orden tipo Excel ITV)."""
+    estado = planilla_viewer.estado_planilla()
+    if not estado["disponible"]:
+        return {"hojas": [], **estado}
+    return {"hojas": planilla_viewer.listar_hojas(), **estado}
+
+
+@router.get("/planilla/hoja")
+async def planilla_hoja(
+    nombre: str = Query(..., description="Nombre exacto de la hoja Excel"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=10, le=500),
+    _=Depends(get_current_user),
+):
+    """Devuelve la grilla de una hoja (paginada) tal como en el Excel."""
+    try:
+        return planilla_viewer.leer_hoja(nombre, page=page, page_size=page_size)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Error al leer la hoja: {exc}") from exc
+
+
+@router.post("/planilla/cargar")
+async def planilla_cargar(
+    file: UploadFile = File(...),
+    _user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
+):
+    """
+    Sube/actualiza la planilla ITV oficial (.xlsx) usada por las pestañas
+    CUADRO DE EDAD, BAJAS, etc.
+    """
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Se requiere un archivo .xlsx")
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Archivo vacío")
+    if len(contents) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Archivo demasiado grande (máx. 50 MB)")
+    try:
+        path = planilla_viewer.guardar_planilla(contents, file.filename)
+        hojas = planilla_viewer.listar_hojas(path)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"No se pudo procesar el Excel: {exc}") from exc
+    return {
+        "status": "ok",
+        "filename": file.filename,
+        "hojas": hojas,
+        "mensaje": f"Planilla '{file.filename}' cargada con {len(hojas)} hojas.",
+    }

@@ -910,6 +910,78 @@ select.form-control option { background: var(--bg-input); }
   color: var(--text-muted);
 }
 
+/* ── Reportes: pestañas planilla ITV ─────────────── */
+.report-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.report-tabs-main {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.report-tab {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--bg-card, #fff);
+  color: var(--text-secondary, #475569);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.report-tab:hover {
+  border-color: var(--primary-color, #2563eb);
+  color: var(--primary-color, #2563eb);
+}
+.report-tab.active {
+  background: var(--primary-color, #2563eb);
+  border-color: var(--primary-color, #2563eb);
+  color: #fff;
+}
+.planilla-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary, #f8fafc);
+}
+.planilla-table-wrap {
+  overflow: auto;
+  max-height: min(70vh, 720px);
+}
+.planilla-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.78rem;
+}
+.planilla-table td {
+  border: 1px solid var(--border, #e2e8f0);
+  padding: 5px 8px;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.planilla-table tr:nth-child(even) td {
+  background: rgba(0, 0, 0, 0.015);
+}
+.planilla-header-row td {
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.08) !important;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
 /* ═══════════════════════════════════════════════════
    RESPONSIVE
 ═══════════════════════════════════════════════════ */

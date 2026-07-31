@@ -22,7 +22,7 @@ export default function SegurosPage() {
         <div>
           <h1 className="page-header-title">Seguros de Buses</h1>
           <p className="page-header-sub">
-            Carga de pólizas con teclado: RUA → tipo → fechas → compañía → póliza
+            Carga: Empresa EOT → RUA filtrada → tipo → fechas
           </p>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={() => refetch()}>

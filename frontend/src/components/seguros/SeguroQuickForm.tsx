@@ -1,13 +1,28 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { busesApi, segurosApi } from '../../api'
+import { empresasApi, segurosApi } from '../../api'
 import { formatApiError } from '../../api/client'
 
 type TipoSeguro = { id_tipo_seguro: number; nombre: string }
 type Compania = { id_compania: number; nombre: string }
-type BusHit = { id_bus: number; rua?: string; numero_chassis?: string; año?: number }
+type EotItem = {
+  eot_id: number
+  id_eot_vmt_hex: string
+  eot_nombre?: string
+  eot_linea?: string
+}
+type BusHit = {
+  id_bus: number
+  rua?: string | null
+  numero_chassis?: string | null
+  año?: number | null
+  estado_bus?: string | null
+}
 
 const emptyForm = () => ({
+  empresa_q: '',
+  id_eot: '',
+  empresa_label: '',
   rua: '',
   id_tipo_seguro: '',
   fecha_vencimiento: '',
@@ -23,11 +38,16 @@ interface SeguroQuickFormProps {
 export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
   const [form, setForm] = useState(emptyForm)
   const [bus, setBus] = useState<BusHit | null>(null)
-  const [busHint, setBusHint] = useState('')
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const [empOpen, setEmpOpen] = useState(false)
+  const [empHi, setEmpHi] = useState(0)
+  const [ruaOpen, setRuaOpen] = useState(false)
+  const [ruaHi, setRuaHi] = useState(0)
+
+  const empresaRef = useRef<HTMLInputElement>(null)
   const ruaRef = useRef<HTMLInputElement>(null)
   const tipoRef = useRef<HTMLSelectElement>(null)
   const vencRef = useRef<HTMLInputElement>(null)
@@ -35,7 +55,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
   const companiaRef = useRef<HTMLSelectElement>(null)
   const polizaRef = useRef<HTMLInputElement>(null)
 
-  const fieldRefs = [ruaRef, tipoRef, vencRef, inicioRef, companiaRef, polizaRef] as const
+  const LAST = 6
 
   const { data: tiposData } = useQuery({
     queryKey: ['seguros-tipos'],
@@ -45,34 +65,76 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
     queryKey: ['seguros-companias'],
     queryFn: () => segurosApi.companias(),
   })
+  const { data: empresasData } = useQuery({
+    queryKey: ['seguros-eots'],
+    queryFn: () =>
+      empresasApi.listar({
+        page: 1,
+        page_size: 200,
+        solo_activas: true,
+        solo_permisionarias: true,
+      }),
+  })
 
   const tipos: TipoSeguro[] = tiposData?.data ?? []
   const companias: Compania[] = companiasData?.data ?? []
+  const empresas: EotItem[] = empresasData?.data?.items ?? []
 
-  const focusFirst = useCallback(() => {
-    requestAnimationFrame(() => {
-      ruaRef.current?.focus()
-      ruaRef.current?.select()
-    })
-  }, [])
+  const { data: busesEotData, isFetching: loadingBuses } = useQuery({
+    queryKey: ['seguros-eot-buses', form.id_eot],
+    queryFn: () => empresasApi.busesDeEmpresa(form.id_eot, { solo_activas: true }),
+    enabled: !!form.id_eot,
+  })
+
+  const busesEot: BusHit[] = useMemo(() => {
+    const raw = busesEotData?.data
+    if (Array.isArray(raw)) return raw
+    if (raw?.buses && Array.isArray(raw.buses)) return raw.buses
+    if (raw?.items && Array.isArray(raw.items)) return raw.items
+    return []
+  }, [busesEotData])
+
+  const empresasFiltradas = useMemo(() => {
+    const q = form.empresa_q.trim().toUpperCase()
+    if (!q) return empresas.slice(0, 40)
+    return empresas
+      .filter((e) => {
+        const nom = (e.eot_nombre || '').toUpperCase()
+        const lin = (e.eot_linea || '').toUpperCase()
+        const hex = (e.id_eot_vmt_hex || '').toUpperCase()
+        return nom.includes(q) || lin.includes(q) || hex.includes(q)
+      })
+      .slice(0, 40)
+  }, [empresas, form.empresa_q])
+
+  const ruasFiltradas = useMemo(() => {
+    if (!form.id_eot) return []
+    const q = form.rua.trim().toUpperCase()
+    const list = busesEot.filter((b) => (b.estado_bus || 'ACTIVO').toUpperCase() !== 'INACTIVO')
+    if (!q) return list.slice(0, 30)
+    return list
+      .filter((b) => {
+        const rua = (b.rua || '').toUpperCase()
+        const ch = (b.numero_chassis || '').toUpperCase()
+        return rua.includes(q) || ch.includes(q)
+      })
+      .slice(0, 30)
+  }, [busesEot, form.id_eot, form.rua])
 
   const focusAt = useCallback((index: number) => {
-    const refs = [ruaRef, tipoRef, vencRef, inicioRef, companiaRef, polizaRef]
+    const refs = [empresaRef, ruaRef, tipoRef, vencRef, inicioRef, companiaRef, polizaRef]
     const el = refs[index]?.current
     if (!el) return
     requestAnimationFrame(() => {
       el.focus()
-      if (el instanceof HTMLInputElement && el.type !== 'date') {
-        el.select()
-      }
+      if (el instanceof HTMLInputElement && el.type !== 'date') el.select()
     })
   }, [])
 
   useEffect(() => {
-    focusFirst()
-  }, [focusFirst])
+    focusAt(0)
+  }, [focusAt])
 
-  // Prefijar tipo PASAJEROS si existe
   useEffect(() => {
     if (!form.id_tipo_seguro && tipos.length) {
       const pas = tipos.find((t) => t.nombre.toUpperCase() === 'PASAJEROS') || tipos[0]
@@ -80,42 +142,60 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
     }
   }, [tipos, form.id_tipo_seguro])
 
-  const resolveBus = async (ruaRaw: string): Promise<BusHit | null> => {
-    const rua = ruaRaw.trim().toUpperCase()
-    if (!rua) {
-      setBus(null)
-      setBusHint('')
-      return null
-    }
-    try {
-      const res = await busesApi.listar({ search: rua, page_size: 10, page: 1 })
-      const items: BusHit[] = res.data?.items ?? []
-      const exact =
-        items.find((b) => (b.rua || '').toUpperCase() === rua) ||
-        items.find((b) => (b.numero_chassis || '').toUpperCase() === rua) ||
-        null
-      if (exact) {
-        setBus(exact)
-        setBusHint(`${exact.rua || '—'} · chasis ${exact.numero_chassis || '—'} · #${exact.id_bus}`)
-        return exact
-      }
-      setBus(null)
-      setBusHint(items.length ? 'RUA no exacta. Revisá el valor.' : 'Bus no encontrado')
-      return null
-    } catch {
-      setBus(null)
-      setBusHint('Error al buscar el bus')
-      return null
-    }
+  useEffect(() => {
+    setEmpHi(0)
+  }, [form.empresa_q])
+
+  useEffect(() => {
+    setRuaHi(0)
+  }, [form.rua, form.id_eot])
+
+  const set = (key: keyof ReturnType<typeof emptyForm>, value: string) => {
+    setForm((p) => ({ ...p, [key]: value }))
+    setStatus('')
   }
 
-  const resetForm = (keepTipo = true) => {
-    const tipo = keepTipo ? form.id_tipo_seguro : ''
-    setForm({ ...emptyForm(), id_tipo_seguro: tipo })
+  const selectEmpresa = (e: EotItem) => {
+    setForm((p) => ({
+      ...p,
+      id_eot: e.id_eot_vmt_hex,
+      empresa_label: e.eot_nombre || e.id_eot_vmt_hex,
+      empresa_q: e.eot_nombre || e.id_eot_vmt_hex,
+      rua: '',
+    }))
     setBus(null)
-    setBusHint('')
+    setEmpOpen(false)
+    setRuaOpen(false)
     setError('')
-    focusFirst()
+    focusAt(1)
+  }
+
+  const selectBus = (b: BusHit) => {
+    setBus(b)
+    setForm((p) => ({ ...p, rua: (b.rua || '').toUpperCase() }))
+    setRuaOpen(false)
+    setError('')
+    focusAt(2)
+  }
+
+  const resetForm = (keepEmpresaTipo = true) => {
+    const keep = keepEmpresaTipo
+      ? {
+          id_eot: form.id_eot,
+          empresa_label: form.empresa_label,
+          empresa_q: form.empresa_label || form.empresa_q,
+          id_tipo_seguro: form.id_tipo_seguro,
+        }
+      : {}
+    setForm({ ...emptyForm(), ...keep })
+    setBus(null)
+    setError('')
+    setEmpOpen(false)
+    setRuaOpen(false)
+    requestAnimationFrame(() => {
+      if (keep.id_eot) focusAt(1)
+      else focusAt(0)
+    })
   }
 
   const submit = async () => {
@@ -123,28 +203,39 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
     setStatus('')
     setLoading(true)
     try {
+      if (!form.id_eot) {
+        setError('Seleccioná una empresa EOT.')
+        focusAt(0)
+        return
+      }
+
       let resolved = bus
-      if (!resolved || (resolved.rua || '').toUpperCase() !== form.rua.trim().toUpperCase()) {
-        resolved = await resolveBus(form.rua)
+      const rua = form.rua.trim().toUpperCase()
+      if (!resolved || (resolved.rua || '').toUpperCase() !== rua) {
+        resolved =
+          ruasFiltradas.find((b) => (b.rua || '').toUpperCase() === rua) ||
+          busesEot.find((b) => (b.rua || '').toUpperCase() === rua) ||
+          null
       }
       if (!resolved) {
-        setError('Ingresá una RUA válida de un bus registrado.')
-        focusAt(0)
+        setError('Seleccioná una RUA de la empresa.')
+        focusAt(1)
+        setRuaOpen(true)
         return
       }
       if (!form.id_tipo_seguro) {
         setError('Seleccioná el tipo de seguro.')
-        focusAt(1)
+        focusAt(2)
         return
       }
       if (!form.fecha_vencimiento) {
         setError('Ingresá la fecha de vencimiento.')
-        focusAt(2)
+        focusAt(3)
         return
       }
       if (!form.fecha_inicio) {
         setError('Ingresá la fecha de inicio.')
-        focusAt(3)
+        focusAt(4)
         return
       }
 
@@ -160,14 +251,83 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
 
       const tipoNom =
         tipos.find((t) => t.id_tipo_seguro === Number(form.id_tipo_seguro))?.nombre || 'Seguro'
-      setStatus(`Guardado: ${resolved.rua || resolved.id_bus} · ${tipoNom} · vence ${form.fecha_vencimiento}`)
+      setStatus(
+        `Guardado: ${form.empresa_label} · ${resolved.rua || resolved.id_bus} · ${tipoNom} · vence ${form.fecha_vencimiento}`,
+      )
       onSuccess()
       resetForm(true)
     } catch (err) {
       setError(formatApiError(err, 'No se pudo guardar el seguro.'))
-      focusFirst()
+      focusAt(1)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const onEmpresaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      resetForm(false)
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setEmpOpen(true)
+      setEmpHi((i) => Math.min(i + 1, Math.max(empresasFiltradas.length - 1, 0)))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setEmpHi((i) => Math.max(i - 1, 0))
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (empresasFiltradas.length) {
+        const pick = empresasFiltradas[Math.min(empHi, empresasFiltradas.length - 1)]
+        selectEmpresa(pick)
+      }
+      return
+    }
+    if (e.key === 'Tab' && !e.shiftKey && form.id_eot) {
+      setEmpOpen(false)
+    }
+  }
+
+  const onRuaKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setForm((p) => ({ ...p, rua: '' }))
+      setBus(null)
+      setRuaOpen(false)
+      focusAt(0)
+      return
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setRuaOpen(true)
+      setRuaHi((i) => Math.min(i + 1, Math.max(ruasFiltradas.length - 1, 0)))
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setRuaHi((i) => Math.max(i - 1, 0))
+      return
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (!form.id_eot) {
+        setError('Primero seleccioná la empresa EOT.')
+        focusAt(0)
+        return
+      }
+      if (ruasFiltradas.length) {
+        const pick = ruasFiltradas[Math.min(ruaHi, ruasFiltradas.length - 1)]
+        selectBus(pick)
+        return
+      }
+      setError('No hay buses que coincidan con esa RUA en la empresa.')
+      setRuaOpen(true)
     }
   }
 
@@ -182,53 +342,54 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
     }
     if (e.key !== 'Enter') return
     e.preventDefault()
-
-    // En RUA: resolver bus y avanzar
-    if (index === 0) {
-      const found = await resolveBus(form.rua)
-      if (!found) {
-        setError('Bus no encontrado. Corregí la RUA.')
-        focusAt(0)
-        return
-      }
-      setError('')
-      focusAt(1)
-      return
-    }
-
-    // Último campo → guardar
-    if (index === fieldRefs.length - 1) {
+    if (index === LAST) {
       await submit()
       return
     }
-
     focusAt(index + 1)
   }
 
-  const set = (key: keyof ReturnType<typeof emptyForm>, value: string) => {
-    setForm((p) => ({ ...p, [key]: value }))
-    setStatus('')
+  const dropdownStyle: React.CSSProperties = {
+    position: 'absolute',
+    zIndex: 30,
+    left: 0,
+    right: 0,
+    top: '100%',
+    marginTop: 4,
+    maxHeight: 220,
+    overflowY: 'auto',
+    background: 'var(--bg-card, #fff)',
+    border: '1px solid var(--border-color, #e2e8f0)',
+    borderRadius: 8,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
   }
+
+  const itemStyle = (active: boolean): React.CSSProperties => ({
+    padding: '8px 10px',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    background: active ? 'var(--primary-color, #2563eb)' : 'transparent',
+    color: active ? '#fff' : 'inherit',
+  })
 
   return (
     <div className="card" style={{ marginBottom: 20, padding: '16px 20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 12 }}>
         <div>
           <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Carga rápida de seguro</div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Enter avanza de campo · Tab entre campos · Enter en el último guarda y vuelve a RUA · Esc limpia
+            Empresa → RUA (filtra al digitar) · ↑↓ elegir · Enter confirmar · Tab avanza · Esc limpia
           </div>
         </div>
-        {busHint && (
-          <div style={{ fontSize: '0.8rem', color: bus ? 'var(--success, #166534)' : 'var(--danger, #991b1b)' }}>
-            {busHint}
+        {form.id_eot && (
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+            {loadingBuses ? 'Cargando buses…' : `${busesEot.length} buses en la EOT`}
+            {bus && ` · seleccionado #${bus.id_bus}`}
           </div>
         )}
       </div>
 
-      {error && (
-        <div className="error-message" style={{ marginBottom: 12 }}>{error}</div>
-      )}
+      {error && <div className="error-message" style={{ marginBottom: 12 }}>{error}</div>}
       {status && !error && (
         <div
           style={{
@@ -247,30 +408,103 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gridTemplateColumns: 'minmax(220px, 1.4fr) repeat(auto-fit, minmax(130px, 1fr))',
           gap: 12,
           alignItems: 'end',
         }}
       >
-        <div className="form-group" style={{ marginBottom: 0 }}>
+        {/* Empresa EOT */}
+        <div className="form-group" style={{ marginBottom: 0, position: 'relative' }}>
+          <label className="form-label">Empresa EOT *</label>
+          <input
+            ref={empresaRef}
+            className="form-control"
+            value={form.empresa_q}
+            autoComplete="off"
+            placeholder="Escribí nombre o línea..."
+            disabled={loading}
+            onFocus={() => setEmpOpen(true)}
+            onChange={(e) => {
+              set('empresa_q', e.target.value)
+              setForm((p) => ({ ...p, id_eot: '', empresa_label: '', rua: '' }))
+              setBus(null)
+              setEmpOpen(true)
+            }}
+            onKeyDown={onEmpresaKeyDown}
+            onBlur={() => {
+              // delay para permitir click en opción
+              setTimeout(() => setEmpOpen(false), 150)
+            }}
+          />
+          {empOpen && empresasFiltradas.length > 0 && (
+            <div style={dropdownStyle} role="listbox">
+              {empresasFiltradas.map((e, i) => (
+                <div
+                  key={e.id_eot_vmt_hex}
+                  role="option"
+                  aria-selected={i === empHi}
+                  style={itemStyle(i === empHi)}
+                  onMouseDown={(ev) => {
+                    ev.preventDefault()
+                    selectEmpresa(e)
+                  }}
+                  onMouseEnter={() => setEmpHi(i)}
+                >
+                  <div style={{ fontWeight: 600 }}>{e.eot_nombre}</div>
+                  {e.eot_linea && (
+                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>Líneas: {e.eot_linea.trim()}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* RUA filtrada por EOT */}
+        <div className="form-group" style={{ marginBottom: 0, position: 'relative' }}>
           <label className="form-label">RUA *</label>
           <input
             ref={ruaRef}
             className="form-control"
             value={form.rua}
             autoComplete="off"
-            placeholder="Ej. BRT560"
+            placeholder={form.id_eot ? 'Filtrar RUA...' : 'Elegí empresa primero'}
+            disabled={loading || !form.id_eot}
+            onFocus={() => form.id_eot && setRuaOpen(true)}
             onChange={(e) => {
               set('rua', e.target.value.toUpperCase())
               setBus(null)
-              setBusHint('')
+              setRuaOpen(true)
             }}
-            onKeyDown={(e) => onFieldKeyDown(e, 0)}
-            onBlur={() => {
-              if (form.rua.trim()) void resolveBus(form.rua)
-            }}
-            disabled={loading}
+            onKeyDown={onRuaKeyDown}
+            onBlur={() => setTimeout(() => setRuaOpen(false), 150)}
           />
+          {ruaOpen && form.id_eot && (
+            <div style={dropdownStyle} role="listbox">
+              {ruasFiltradas.length === 0 ? (
+                <div style={{ padding: '8px 10px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {loadingBuses ? 'Cargando…' : 'Sin coincidencias'}
+                </div>
+              ) : (
+                ruasFiltradas.map((b, i) => (
+                  <div
+                    key={b.id_bus}
+                    role="option"
+                    aria-selected={i === ruaHi}
+                    style={itemStyle(i === ruaHi)}
+                    onMouseDown={(ev) => {
+                      ev.preventDefault()
+                      selectBus(b)
+                    }}
+                    onMouseEnter={() => setRuaHi(i)}
+                  >
+                    <strong>{b.rua || '—'}</strong>
+                    <span style={{ opacity: 0.85 }}> · {b.numero_chassis || '—'} · #{b.id_bus}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div className="form-group" style={{ marginBottom: 0 }}>
@@ -280,7 +514,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             className="form-control"
             value={form.id_tipo_seguro}
             onChange={(e) => set('id_tipo_seguro', e.target.value)}
-            onKeyDown={(e) => onFieldKeyDown(e, 1)}
+            onKeyDown={(e) => onFieldKeyDown(e, 2)}
             disabled={loading}
           >
             {tipos.map((t) => (
@@ -299,7 +533,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             className="form-control"
             value={form.fecha_vencimiento}
             onChange={(e) => set('fecha_vencimiento', e.target.value)}
-            onKeyDown={(e) => onFieldKeyDown(e, 2)}
+            onKeyDown={(e) => onFieldKeyDown(e, 3)}
             disabled={loading}
           />
         </div>
@@ -312,19 +546,19 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             className="form-control"
             value={form.fecha_inicio}
             onChange={(e) => set('fecha_inicio', e.target.value)}
-            onKeyDown={(e) => onFieldKeyDown(e, 3)}
+            onKeyDown={(e) => onFieldKeyDown(e, 4)}
             disabled={loading}
           />
         </div>
 
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Compañía</label>
+          <label className="form-label">Compañía seguro</label>
           <select
             ref={companiaRef}
             className="form-control"
             value={form.id_compania}
             onChange={(e) => set('id_compania', e.target.value)}
-            onKeyDown={(e) => onFieldKeyDown(e, 4)}
+            onKeyDown={(e) => onFieldKeyDown(e, 5)}
             disabled={loading}
           >
             <option value="">— Sin compañía —</option>
@@ -345,7 +579,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             autoComplete="off"
             placeholder="Opcional"
             onChange={(e) => set('numero_poliza', e.target.value)}
-            onKeyDown={(e) => onFieldKeyDown(e, 5)}
+            onKeyDown={(e) => onFieldKeyDown(e, 6)}
             disabled={loading}
           />
         </div>
@@ -366,7 +600,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
           onClick={() => resetForm(true)}
           disabled={loading}
         >
-          Limpiar (Esc)
+          Limpiar RUA (mantener EOT)
         </button>
       </div>
     </div>

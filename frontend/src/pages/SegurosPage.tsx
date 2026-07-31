@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { segurosApi } from '../api'
 import { Search, RefreshCw } from 'lucide-react'
+import SeguroQuickForm from '../components/seguros/SeguroQuickForm'
 
 export default function SegurosPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
 
-  const { data, isLoading, refetch } = useQuery<{ data: { items: any[] } }>({
+  const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total?: number } }>({
     queryKey: ['seguros', page, search],
     queryFn: () => segurosApi.listar({ page, page_size: PAGE_SIZE, ...(search && { search }) }),
   })
@@ -20,12 +21,16 @@ export default function SegurosPage() {
       <div className="page-header">
         <div>
           <h1 className="page-header-title">Seguros de Buses</h1>
-          <p className="page-header-sub">Pólizas de seguro contra terceros y pasajeros</p>
+          <p className="page-header-sub">
+            Carga de pólizas con teclado: RUA → tipo → fechas → compañía → póliza
+          </p>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={() => refetch()}>
           <RefreshCw size={14} /> Actualizar
         </button>
       </div>
+
+      <SeguroQuickForm onSuccess={() => { setPage(1); void refetch() }} />
 
       <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
         <div className="search-bar">
@@ -33,7 +38,10 @@ export default function SegurosPage() {
           <input
             placeholder="Buscar por N° Póliza o Bus..."
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            onChange={(e) => {
+              setSearch(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
       </div>
@@ -45,7 +53,7 @@ export default function SegurosPage() {
           <div className="empty-state">
             <div className="empty-icon">🛡️</div>
             <div className="empty-title">No hay pólizas registradas</div>
-            <p>No se encontraron registros de seguros.</p>
+            <p>Usá el formulario de arriba para cargar el primer seguro.</p>
           </div>
         ) : (
           <div className="table-container">
@@ -73,13 +81,17 @@ export default function SegurosPage() {
                       {new Date(seg.fecha_vencimiento).toLocaleDateString('es-PY')}
                     </td>
                     <td>
-                      <span className={`badge ${
-                        seg.seguro_vigente
-                          ? (seg.estado_calculado === 'VENCIDO' ? 'badge-vencido' : 'badge-vigente')
-                          : 'badge-sin-itv'
-                      }`}>
+                      <span
+                        className={`badge ${
+                          seg.seguro_vigente
+                            ? seg.estado_calculado === 'VENCIDO'
+                              ? 'badge-vencido'
+                              : 'badge-vigente'
+                            : 'badge-sin-itv'
+                        }`}
+                      >
                         {seg.seguro_vigente
-                          ? (seg.estado_calculado || 'VIGENTE')
+                          ? seg.estado_calculado || 'VIGENTE'
                           : 'NO VIGENTE'}
                       </span>
                     </td>

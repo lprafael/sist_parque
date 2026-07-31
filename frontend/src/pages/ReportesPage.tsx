@@ -307,7 +307,7 @@ export default function ReportesPage() {
           <h1 className="page-header-title">Centro de Reportes</h1>
           <p className="page-header-sub">
             {vista === 'planilla'
-              ? 'Pestañas de la planilla ITV: CUADRO DE EDAD, BAJAS, operativos, inclusivos…'
+              ? 'Pestañas con cuadros en vivo (edad, bajas, ITV, faltantes…) como en la planilla ITV'
               : 'Armá un reporte personalizado: filtrá, elegí columnas y resúmenes, y descargá en Excel'}
           </p>
         </div>

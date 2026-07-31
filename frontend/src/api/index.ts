@@ -135,6 +135,9 @@ export const reportesApi = {
   opciones: () => api.get('/reportes/opciones'),
   descargarBusesExcel: (params?: Record<string, string | number | boolean>) =>
     api.get('/reportes/buses/excel', { params, responseType: 'blob' }),
+  planillaPestanas: () => api.get('/reportes/planilla/pestanas'),
+  planillaReporte: (key: string) =>
+    api.get(`/reportes/planilla/reporte/${key}`, { timeout: 120000 }),
   planillaEstado: () => api.get('/reportes/planilla/estado'),
   planillaHojas: () => api.get('/reportes/planilla/hojas'),
   planillaHoja: (nombre: string, params?: { page?: number; page_size?: number }) =>

@@ -382,17 +382,48 @@ async def exportar_buses_excel(
     )
 
 
-# ── Planilla ITV (hojas tipo Excel) ─────────────────────────
+# ── Planilla ITV (cuadros calculados desde la DB) ───────────
+
+@router.get("/planilla/pestanas")
+async def planilla_pestanas(_=Depends(get_current_user)):
+    """Lista de pestañas disponibles (equivalente a hojas del Excel ITV)."""
+    from app.services.planilla_reportes_db import PESTANAS
+    return {"pestanas": PESTANAS, "fuente": "registro_habilitacion + public.eots"}
+
+
+@router.get("/planilla/reporte/{key}")
+async def planilla_reporte_db(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """
+    Devuelve un cuadro de la planilla ITV calculado en vivo desde la base
+    (CUADRO DE EDAD, BAJAS, operativos, ITV, faltantes, etc.).
+    """
+    from app.services.planilla_reportes_db import obtener_reporte
+    try:
+        return await obtener_reporte(db, key)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al generar el reporte '{key}': {exc}",
+        ) from exc
+
+
+# ── Planilla Excel (opcional / legado) ──────────────────────
 
 @router.get("/planilla/estado")
 async def planilla_estado(_=Depends(get_current_user)):
-    """Indica si hay una planilla ITV disponible para las pestañas."""
+    """Indica si hay una planilla ITV Excel cargada (legado)."""
     return planilla_viewer.estado_planilla()
 
 
 @router.get("/planilla/hojas")
 async def planilla_hojas(_=Depends(get_current_user)):
-    """Lista las hojas de la planilla cargada (orden tipo Excel ITV)."""
+    """Lista las hojas de la planilla Excel cargada (legado)."""
     estado = planilla_viewer.estado_planilla()
     if not estado["disponible"]:
         return {"hojas": [], **estado}
@@ -406,7 +437,7 @@ async def planilla_hoja(
     page_size: int = Query(100, ge=10, le=500),
     _=Depends(get_current_user),
 ):
-    """Devuelve la grilla de una hoja (paginada) tal como en el Excel."""
+    """Devuelve la grilla de una hoja Excel (legado). Preferir /planilla/reporte/{key}."""
     try:
         return planilla_viewer.leer_hoja(nombre, page=page, page_size=page_size)
     except FileNotFoundError as exc:
@@ -422,10 +453,7 @@ async def planilla_cargar(
     file: UploadFile = File(...),
     _user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
 ):
-    """
-    Sube/actualiza la planilla ITV oficial (.xlsx) usada por las pestañas
-    CUADRO DE EDAD, BAJAS, etc.
-    """
+    """Sube planilla Excel (legado). Los cuadros principales salen de la DB."""
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(status_code=400, detail="Se requiere un archivo .xlsx")
     contents = await file.read()

@@ -31,8 +31,14 @@ def _empresa_key(empresa_linea: Optional[str]) -> str:
     s = _fold(empresa_linea or "")
     if not s:
         return ""
+    # Cortar sufijos de línea: "LINEA 5", "LINEAS 53-58", "L-45-56-50"
     s = re.split(r"\bLINEAS?\b", s, maxsplit=1)[0].strip()
-    s = re.sub(r"\b(SRL|SA|S A|CIA|LTDA|SOCIEDAD ANONIMA)\b", " ", s)
+    s = re.sub(r"\bL(?:[\s\-]*\d+)+\s*$", "", s).strip()
+    s = re.sub(
+        r"\b(SRL|SA|S A|S R L|SATC|S A T C|CIA|LTDA|SOCIEDAD ANONIMA)\b",
+        " ",
+        s,
+    )
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -96,10 +102,12 @@ class _PlanItem:
     accion: str  # ok | transferir | alta
 
 
-def _build_eot_indexes(eots: list[Eot]) -> tuple[dict[str, Eot], dict[str, list[Eot]], dict[str, Eot]]:
+def _build_eot_indexes(
+    eots: list[Eot],
+) -> tuple[dict[str, Eot], dict[str, list[Eot]], dict[str, list[Eot]]]:
     by_hex: dict[str, Eot] = {}
     by_key: dict[str, list[Eot]] = defaultdict(list)
-    by_linea_digits: dict[str, Eot] = {}
+    by_linea_digits: dict[str, list[Eot]] = defaultdict(list)
     for e in eots:
         if not e.id_eot_vmt_hex:
             continue
@@ -108,49 +116,29 @@ def _build_eot_indexes(eots: list[Eot]) -> tuple[dict[str, Eot], dict[str, list[
         if key:
             by_key[key].append(e)
         digits = _linea_digits(e.eot_linea)
-        if digits and digits not in by_linea_digits:
-            by_linea_digits[digits] = e
+        if digits:
+            by_linea_digits[digits].append(e)
     return by_hex, by_key, by_linea_digits
 
 
-def _resolve_eot(
+def _match_by_name(
     empresa_linea: Optional[str],
-    codigo: Optional[int],
     by_key: dict[str, list[Eot]],
-    by_linea_digits: dict[str, Eot],
-    by_hex: dict[str, Eot],
 ) -> Optional[Eot]:
-    if codigo is not None:
-        cod_s = str(int(codigo))
-        if cod_s in by_linea_digits:
-            return by_linea_digits[cod_s]
-        # p.ej. Excel 5358 vs eot_linea 53-58-128 → dígitos 5358128
-        parcial = [
-            e
-            for dig, e in by_linea_digits.items()
-            if dig.startswith(cod_s) or cod_s.startswith(dig)
-        ]
-        if len({e.id_eot_vmt_hex for e in parcial}) == 1:
-            return parcial[0]
-        hex_try = cod_s.upper()
-        if hex_try in by_hex:
-            return by_hex[hex_try]
-        padded = hex_try.zfill(4)
-        if padded in by_hex:
-            return by_hex[padded]
-
     key = _empresa_key(empresa_linea)
     if not key:
         return None
-    if key in by_key and len(by_key[key]) == 1:
+    if key in by_key and len({e.id_eot_vmt_hex for e in by_key[key]}) == 1:
         return by_key[key][0]
 
-    # Contención: preferir la clave EOT más larga que matchee
     candidates: list[tuple[int, Eot]] = []
     for k, lst in by_key.items():
         if not k:
             continue
-        if key == k or key.startswith(k) or k.startswith(key) or key in k or k in key:
+        if key == k or key.startswith(k + " ") or k.startswith(key + " ") or key == k:
+            for e in lst:
+                candidates.append((len(k), e))
+        elif len(k) >= 5 and (k in key or key in k):
             for e in lst:
                 candidates.append((len(k), e))
     if not candidates:
@@ -158,12 +146,55 @@ def _resolve_eot(
     candidates.sort(key=lambda x: x[0], reverse=True)
     best_len = candidates[0][0]
     top = [e for ln, e in candidates if ln == best_len]
-    # únicos por hex
     uniq = {e.id_eot_vmt_hex: e for e in top}
     if len(uniq) == 1:
         return next(iter(uniq.values()))
     return None
 
+
+def _match_by_codigo(
+    codigo: Optional[int],
+    by_linea_digits: dict[str, list[Eot]],
+    by_hex: dict[str, Eot],
+) -> Optional[Eot]:
+    if codigo is None:
+        return None
+    cod_s = str(int(codigo))
+
+    # Hex EOT (001B, 0003, …)
+    for cand in (cod_s.upper(), cod_s.upper().zfill(4)):
+        if cand in by_hex:
+            return by_hex[cand]
+
+    # Exact digits of eot_linea — solo si es único (línea "5" es ambigua)
+    exact = by_linea_digits.get(cod_s) or []
+    if len({e.id_eot_vmt_hex for e in exact}) == 1:
+        return exact[0]
+
+    # Prefijo: Excel 5358 ⊂ 5358128 (53-58-128). Nunca al revés con dígitos cortos.
+    if len(cod_s) >= 3:
+        parcial: list[Eot] = []
+        for dig, lst in by_linea_digits.items():
+            if len(dig) >= len(cod_s) and dig.startswith(cod_s):
+                parcial.extend(lst)
+        if len({e.id_eot_vmt_hex for e in parcial}) == 1:
+            return parcial[0]
+    return None
+
+
+def _resolve_eot(
+    empresa_linea: Optional[str],
+    codigo: Optional[int],
+    by_key: dict[str, list[Eot]],
+    by_linea_digits: dict[str, list[Eot]],
+    by_hex: dict[str, Eot],
+) -> Optional[Eot]:
+    # 1) Nombre comercial / razón social (evita confusiones por línea compartida)
+    by_name = _match_by_name(empresa_linea, by_key)
+    if by_name:
+        return by_name
+    # 2) Código / dígitos de línea (solo matches no ambiguos)
+    return _match_by_codigo(codigo, by_linea_digits, by_hex)
 
 async def _load_bus_maps(db: AsyncSession) -> tuple[dict[str, Bus], dict[str, Bus], dict[int, BusEmpresa], dict[str, str]]:
     buses = (await db.execute(select(Bus))).scalars().all()

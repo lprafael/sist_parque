@@ -67,6 +67,7 @@ class EotOut(BaseModel):
     id_eot_vmt_hex: Optional[str] = None
     eot_nombre: Optional[str] = None
     eot_linea: Optional[str] = None          # líneas que opera
+    cod_catalogo: Optional[int] = None
     autorizado: Optional[int] = None
     operativo: Optional[int] = None
     reserva: Optional[int] = None

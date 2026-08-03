@@ -44,7 +44,7 @@ export default function EmpresasPage() {
         <div className="search-bar" style={{ maxWidth: '360px' }}>
           <Search size={15} className="icon" />
           <input
-            placeholder="Buscar por nombre, línea, código o email..."
+            placeholder="Buscar por nombre, catálogo, línea, código o email..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
           />
@@ -81,6 +81,11 @@ export default function EmpresasPage() {
                       ID EOT: <strong style={{ color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
                         {emp.id_eot_vmt_hex}
                       </strong>
+                      {emp.cod_catalogo != null && (
+                        <span style={{ marginLeft: 8 }}>
+                          · Catálogo: <strong style={{ color: 'var(--text-secondary)' }}>{emp.cod_catalogo}</strong>
+                        </span>
+                      )}
                     </div>
                     {emp.eot_linea && (
                       <div style={{ fontSize: '0.73rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>

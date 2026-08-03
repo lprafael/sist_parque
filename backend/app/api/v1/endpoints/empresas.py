@@ -14,7 +14,7 @@ from datetime import date, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import select, func, and_, or_, cast, String
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
@@ -99,14 +99,19 @@ async def listar_empresas(
     q = select(Eot)
     filters = []
     if search:
-        term = f"%{search.strip()}%"
-        # Nombre CID + línea + hex + email (Excel usa alias comercial p.ej. ADUSA)
-        filters.append(or_(
+        raw = search.strip()
+        term = f"%{raw}%"
+        # Nombre CID + línea + hex + email + catálogo (p.ej. MAGNO / 0007 / 7)
+        search_filters = [
             Eot.eot_nombre.ilike(term),
             Eot.eot_linea.ilike(term),
             Eot.id_eot_vmt_hex.ilike(term),
             Eot.e_mail.ilike(term),
-        ))
+            cast(Eot.cod_catalogo, String).ilike(term),
+        ]
+        if raw.isdigit():
+            search_filters.append(Eot.cod_catalogo == int(raw))
+        filters.append(or_(*search_filters))
     if solo_activas:
         eots_con_parque = (
             select(BusEmpresa.id_eot)

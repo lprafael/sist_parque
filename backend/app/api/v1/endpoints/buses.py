@@ -52,10 +52,11 @@ async def listar_buses(
     )
 
     filters = []
-    if search:
+    if search and search.strip():
+        term = f"%{search.strip()}%"
         filters.append(or_(
-            Bus.rua.ilike(f"%{search}%"),
-            Bus.numero_chassis.ilike(f"%{search}%"),
+            Bus.rua.ilike(term),
+            Bus.numero_chassis.ilike(term),
         ))
     if estado_bus:
         filters.append(Bus.estado_bus == estado_bus.upper())

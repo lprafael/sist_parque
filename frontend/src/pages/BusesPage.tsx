@@ -205,6 +205,7 @@ export default function BusesPage() {
                   <tr>
                     <th>#</th>
                     <th>RUA</th>
+                    <th>Chasis</th>
                     <th>Marca</th>
                     <th>Año</th>
                     <th>Carrocería</th>
@@ -223,6 +224,11 @@ export default function BusesPage() {
                       </td>
                       <td style={{ fontWeight: 700, fontFamily: 'monospace', letterSpacing: '0.5px' }}>
                         {bus.rua}
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.78rem', maxWidth: '160px',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        title={bus.numero_chassis ?? ''}>
+                        {bus.numero_chassis ?? '—'}
                       </td>
                       <td>{bus.marca_nombre ?? '—'}</td>
                       <td>{bus.año}</td>

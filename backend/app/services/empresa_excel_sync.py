@@ -124,28 +124,62 @@ def _build_eot_indexes(
 def _match_by_name(
     empresa_linea: Optional[str],
     by_key: dict[str, list[Eot]],
-) -> Optional[Eot]:
+) -> list[Eot]:
     key = _empresa_key(empresa_linea)
     if not key:
-        return None
-    if key in by_key and len({e.id_eot_vmt_hex for e in by_key[key]}) == 1:
-        return by_key[key][0]
+        return []
+    if key in by_key:
+        uniq = {e.id_eot_vmt_hex: e for e in by_key[key]}
+        if len(uniq) == 1:
+            return [next(iter(uniq.values()))]
+        if uniq:
+            return list(uniq.values())
 
     candidates: list[tuple[int, Eot]] = []
     for k, lst in by_key.items():
         if not k:
             continue
-        if key == k or key.startswith(k + " ") or k.startswith(key + " ") or key == k:
+        if key == k or key.startswith(k + " ") or k.startswith(key + " "):
             for e in lst:
                 candidates.append((len(k), e))
         elif len(k) >= 5 and (k in key or key in k):
             for e in lst:
                 candidates.append((len(k), e))
     if not candidates:
-        return None
+        return []
     candidates.sort(key=lambda x: x[0], reverse=True)
     best_len = candidates[0][0]
     top = [e for ln, e in candidates if ln == best_len]
+    return list({e.id_eot_vmt_hex: e for e in top}.values())
+
+
+def _disambiguate_by_codigo(candidates: list[Eot], codigo: Optional[int]) -> Optional[Eot]:
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        return None
+    if codigo is None:
+        # Preferir la razón social más específica (nombre más largo)
+        candidates = sorted(candidates, key=lambda e: len(e.eot_nombre or ""), reverse=True)
+        if len({_empresa_key(e.eot_nombre) for e in candidates}) == 1:
+            return candidates[0]
+        return None
+
+    cod_s = str(int(codigo))
+    scored: list[tuple[int, Eot]] = []
+    for e in candidates:
+        dig = _linea_digits(e.eot_linea)
+        if not dig:
+            continue
+        if dig == cod_s:
+            scored.append((100 + len(dig), e))
+        elif len(cod_s) >= 3 and (dig.startswith(cod_s) or cod_s.startswith(dig)):
+            scored.append((50 + min(len(dig), len(cod_s)), e))
+    if not scored:
+        return None
+    scored.sort(key=lambda x: x[0], reverse=True)
+    best = scored[0][0]
+    top = [e for sc, e in scored if sc == best]
     uniq = {e.id_eot_vmt_hex: e for e in top}
     if len(uniq) == 1:
         return next(iter(uniq.values()))
@@ -161,24 +195,22 @@ def _match_by_codigo(
         return None
     cod_s = str(int(codigo))
 
-    # Hex EOT (001B, 0003, …)
     for cand in (cod_s.upper(), cod_s.upper().zfill(4)):
         if cand in by_hex:
             return by_hex[cand]
 
-    # Exact digits of eot_linea — solo si es único (línea "5" es ambigua)
     exact = by_linea_digits.get(cod_s) or []
     if len({e.id_eot_vmt_hex for e in exact}) == 1:
         return exact[0]
 
-    # Prefijo: Excel 5358 ⊂ 5358128 (53-58-128). Nunca al revés con dígitos cortos.
     if len(cod_s) >= 3:
         parcial: list[Eot] = []
         for dig, lst in by_linea_digits.items():
-            if len(dig) >= len(cod_s) and dig.startswith(cod_s):
+            if len(dig) >= 3 and (dig.startswith(cod_s) or cod_s.startswith(dig)):
                 parcial.extend(lst)
-        if len({e.id_eot_vmt_hex for e in parcial}) == 1:
-            return parcial[0]
+        hit = _disambiguate_by_codigo(parcial, codigo)
+        if hit:
+            return hit
     return None
 
 
@@ -189,11 +221,15 @@ def _resolve_eot(
     by_linea_digits: dict[str, list[Eot]],
     by_hex: dict[str, Eot],
 ) -> Optional[Eot]:
-    # 1) Nombre comercial / razón social (evita confusiones por línea compartida)
+    # 1) Nombre (con desambiguación por código si hay varias EOTs "San Isidro…")
     by_name = _match_by_name(empresa_linea, by_key)
     if by_name:
-        return by_name
-    # 2) Código / dígitos de línea (solo matches no ambiguos)
+        chosen = _disambiguate_by_codigo(by_name, codigo)
+        if chosen:
+            return chosen
+        if len(by_name) == 1:
+            return by_name[0]
+    # 2) Solo código / dígitos de línea
     return _match_by_codigo(codigo, by_linea_digits, by_hex)
 
 async def _load_bus_maps(db: AsyncSession) -> tuple[dict[str, Bus], dict[str, Bus], dict[int, BusEmpresa], dict[str, str]]:
@@ -376,14 +412,37 @@ async def apply_empresa_sync(
                     result.sin_cambio += 1
                     continue
 
+                # Misma fecha de alta: UNIQUE(id_bus, fecha_asignacion) impide
+                # cerrar+crear el mismo día → corregir la fila vigente in-place.
+                if vigente and vigente.fecha_asignacion == hoy:
+                    vigente.id_eot = item.id_eot_destino
+                    vigente.motivo = "TRANSFERENCIA"
+                    vigente.normativa = "Sync planilla ITV (EMPRESA-LINEA)"
+                    vigente.observaciones = f"Excel: {item.excel_empresa}"[:500]
+                    vigente.usuario_registro = user
+                    vigente.estado_asignacion = "ACTIVA"
+                    result.transferencias += 1
+                    continue
+
                 if vigente:
                     fin = hoy - timedelta(days=1)
                     if fin < vigente.fecha_asignacion:
                         fin = vigente.fecha_asignacion
+                    # Si el fin cae el mismo día que el alta vigente, no se puede
+                    # insertar otra fila con la misma fecha_asignacion.
+                    if fin == vigente.fecha_asignacion and vigente.fecha_asignacion == hoy:
+                        vigente.id_eot = item.id_eot_destino
+                        vigente.motivo = "TRANSFERENCIA"
+                        vigente.normativa = "Sync planilla ITV (EMPRESA-LINEA)"
+                        vigente.observaciones = f"Excel: {item.excel_empresa}"[:500]
+                        vigente.usuario_registro = user
+                        result.transferencias += 1
+                        continue
                     vigente.fecha_fin_asignacion = fin
                     vigente.estado_asignacion = "CERRADA"
                     if not vigente.motivo:
                         vigente.motivo = "TRANSFERENCIA"
+                    await db.flush()
 
                 nueva = BusEmpresa(
                     id_bus=item.id_bus,
@@ -397,6 +456,7 @@ async def apply_empresa_sync(
                     usuario_registro=user,
                 )
                 db.add(nueva)
+                await db.flush()
                 if vigente:
                     result.transferencias += 1
                 else:
@@ -408,6 +468,5 @@ async def apply_empresa_sync(
                 break
 
     await db.commit()
-    # silence unused
     _ = preview
     return result

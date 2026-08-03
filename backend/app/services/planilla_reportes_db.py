@@ -5,7 +5,7 @@ from collections import defaultdict
 from datetime import date
 from typing import Any, Optional
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -42,9 +42,28 @@ def _empresa_label(eot: Eot) -> str:
 
 
 async def _eots_activas(db: AsyncSession) -> list[Eot]:
+    """
+    EOTs permisionarias activas en CID (situacion=1)
+    O con parque vigente en registro_habilitacion (ej. ARAPOTI situacion=0).
+    """
+    eots_con_parque = (
+        select(BusEmpresa.id_eot)
+        .join(Bus, Bus.id_bus == BusEmpresa.id_bus)
+        .where(
+            BusEmpresa.fecha_fin_asignacion.is_(None),
+            Bus.estado_bus == "ACTIVO",
+            BusEmpresa.id_eot.is_not(None),
+        )
+        .distinct()
+    )
     res = await db.execute(
         select(Eot)
-        .where(and_(Eot.situacion == 1, Eot.permisionario == True))
+        .where(
+            and_(
+                Eot.permisionario == True,
+                or_(Eot.situacion == 1, Eot.id_eot_vmt_hex.in_(eots_con_parque)),
+            )
+        )
         .order_by(Eot.eot_nombre)
     )
     return list(res.scalars().all())

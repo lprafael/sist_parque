@@ -92,15 +92,26 @@ async def listar_empresas(
     _=Depends(get_current_user)
 ):
     """
-    Lista todas las empresas de public.eots.
-    Solo lectura — no permite crear, editar ni eliminar empresas.
+    Lista empresas de public.eots (solo lectura).
+    Con solo_activas=true incluye situacion=1 en CID y también EOTs
+    con buses activos asignados en registro_habilitacion (aunque CID diga situacion=0).
     """
     q = select(Eot)
     filters = []
     if search:
         filters.append(Eot.eot_nombre.ilike(f"%{search}%"))
     if solo_activas:
-        filters.append(Eot.situacion == 1)   # 1 = activa en el CID
+        eots_con_parque = (
+            select(BusEmpresa.id_eot)
+            .join(Bus, Bus.id_bus == BusEmpresa.id_bus)
+            .where(
+                BusEmpresa.fecha_fin_asignacion.is_(None),
+                Bus.estado_bus == "ACTIVO",
+                BusEmpresa.id_eot.is_not(None),
+            )
+            .distinct()
+        )
+        filters.append(or_(Eot.situacion == 1, Eot.id_eot_vmt_hex.in_(eots_con_parque)))
     if solo_permisionarias is not None:
         filters.append(Eot.permisionario == solo_permisionarias)
     if filters:

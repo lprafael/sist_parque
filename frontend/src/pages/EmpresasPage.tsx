@@ -27,7 +27,7 @@ export default function EmpresasPage() {
         <div>
           <h1 className="page-header-title">Empresas Operadoras</h1>
           <p className="page-header-sub">
-            {total} empresas permisionarias activas (fuente: sistema CID — solo lectura)
+            {total} empresas permisionarias (activas en CID o con parque asignado)
           </p>
         </div>
         <div style={{

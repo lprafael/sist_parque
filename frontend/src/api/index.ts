@@ -125,6 +125,10 @@ export const importadorApi = {
     api.post('/importador/aplicar', formData, { timeout: 600000 }),
   sincronizarEstado: (formData: FormData) =>
     api.post('/importador/sincronizar-estado', formData, { timeout: 300000 }),
+  previewEmpresas: (formData: FormData) =>
+    api.post('/importador/preview-empresas', formData, { timeout: 180000 }),
+  sincronizarEmpresas: (formData: FormData) =>
+    api.post('/importador/sincronizar-empresas', formData, { timeout: 600000 }),
   /** @deprecated usar preview */
   uploadExcel: (formData: FormData) =>
     api.post('/importador/preview', formData, { timeout: 180000 }),

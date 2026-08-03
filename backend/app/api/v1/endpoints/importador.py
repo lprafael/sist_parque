@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.security import require_roles
 from app.services.itv_excel import apply_import, build_preview, sincronizar_estado_desde_excel
+from app.services.empresa_excel_sync import apply_empresa_sync, build_empresa_sync_preview
 
 router = APIRouter(prefix="/importador", tags=["Importador"])
 
@@ -166,6 +167,90 @@ async def sincronizar_estado_excel(
         "mensaje": (
             f"Estados alineados: {result.buses_activados} activados, "
             f"{result.buses_inactivados} inactivados."
+        ),
+    }
+
+
+@router.post("/preview-empresas")
+async def preview_empresas_excel(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
+):
+    """
+    Cruza EMPRESA-LINEA/CODIGO del Excel con bus_empresa (sin escribir).
+    Muestra transferencias y altas necesarias.
+    """
+    contents = await _read_xlsx(file)
+    try:
+        preview = await build_empresa_sync_preview(db, contents)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al analizar empresas del Excel: {exc}",
+        ) from exc
+
+    return {
+        "status": "preview_empresas",
+        "filename": file.filename,
+        "hoja": preview.hoja,
+        "fecha_corte": preview.fecha_corte,
+        "total_excel": preview.total_excel,
+        "matched_bus": preview.matched_bus,
+        "ok_mismo_eot": preview.ok_mismo_eot,
+        "a_transferir": preview.a_transferir,
+        "a_alta": preview.a_alta,
+        "sin_bus": preview.sin_bus,
+        "sin_match_eot": preview.sin_match_eot,
+        "eot_sin_mapear": preview.eot_sin_mapear,
+        "por_eot_destino": preview.por_eot_destino,
+        "muestra_transferencias": preview.muestra_transferencias,
+        "muestra_altas": preview.muestra_altas,
+        "muestra_sin_eot": preview.muestra_sin_eot,
+        "errores_parseo": preview.errores_parseo,
+        "mensaje": (
+            f"Empresas: {preview.a_transferir} transferencias, {preview.a_alta} altas, "
+            f"{preview.ok_mismo_eot} ya correctas, {preview.sin_match_eot} sin mapear EOT."
+        ),
+    }
+
+
+@router.post("/sincronizar-empresas")
+async def sincronizar_empresas_excel(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
+):
+    """
+    Alinea bus_empresa con EMPRESA-LINEA del Excel (transferencias / altas).
+    No toca ITV ni estado ACTIVO/INACTIVO.
+    """
+    contents = await _read_xlsx(file)
+    usuario = getattr(user, "username", None) or getattr(user, "email", None) or str(user)
+    try:
+        result = await apply_empresa_sync(db, contents, usuario=usuario)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al sincronizar empresas: {exc}",
+        ) from exc
+
+    return {
+        "status": "empresas_sincronizadas",
+        "filename": file.filename,
+        "transferencias": result.transferencias,
+        "altas": result.altas,
+        "sin_cambio": result.sin_cambio,
+        "omitidos": result.omitidos,
+        "errores": result.errores,
+        "mensaje": (
+            f"Asignaciones: {result.transferencias} transferencias, "
+            f"{result.altas} altas, {result.sin_cambio} sin cambio."
         ),
     }
 

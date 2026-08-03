@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, Play } from 'lucide-react'
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, Play, Building2 } from 'lucide-react'
 import { importadorApi } from '../api'
 import { formatApiError } from '../api/client'
 
@@ -40,12 +40,44 @@ type ApplyData = {
   errores: string[]
 }
 
+type EmpresaPreviewData = {
+  status: string
+  filename: string
+  hoja: string
+  fecha_corte?: string
+  total_excel: number
+  matched_bus: number
+  ok_mismo_eot: number
+  a_transferir: number
+  a_alta: number
+  sin_bus: number
+  sin_match_eot: number
+  eot_sin_mapear: Record<string, number>
+  por_eot_destino: Record<string, number>
+  muestra_transferencias: Array<Record<string, unknown>>
+  muestra_altas: Array<Record<string, unknown>>
+  muestra_sin_eot: Array<Record<string, unknown>>
+  mensaje: string
+}
+
+type EmpresaApplyData = {
+  status: string
+  mensaje: string
+  transferencias: number
+  altas: number
+  sin_cambio: number
+  omitidos: number
+  errores: string[]
+}
+
 export default function ImportadorPage() {
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
   const [preview, setPreview] = useState<PreviewData | null>(null)
   const [applyResult, setApplyResult] = useState<ApplyData | null>(null)
+  const [empresaPreview, setEmpresaPreview] = useState<EmpresaPreviewData | null>(null)
+  const [empresaApply, setEmpresaApply] = useState<EmpresaApplyData | null>(null)
   const [error, setError] = useState('')
   const [sincronizarEstado, setSincronizarEstado] = useState(false)
   const [crearFaltantes, setCrearFaltantes] = useState(true)
@@ -55,6 +87,8 @@ export default function ImportadorPage() {
       setFile(e.target.files[0])
       setPreview(null)
       setApplyResult(null)
+      setEmpresaPreview(null)
+      setEmpresaApply(null)
       setError('')
     }
   }
@@ -74,6 +108,47 @@ export default function ImportadorPage() {
       setError(formatApiError(err, 'Error al analizar la planilla Excel.'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handlePreviewEmpresas = async () => {
+    if (!file) return
+    setLoading(true)
+    setError('')
+    setEmpresaPreview(null)
+    setEmpresaApply(null)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res = await importadorApi.previewEmpresas(formData)
+      setEmpresaPreview(res.data)
+    } catch (err: any) {
+      setError(formatApiError(err, 'Error al analizar empresas del Excel.'))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAplicarEmpresas = async () => {
+    if (!file || !empresaPreview) return
+    const ok = window.confirm(
+      '¿Sincronizar asignaciones bus↔empresa según el Excel?\n\n' +
+        `${empresaPreview.a_transferir} transferencias y ${empresaPreview.a_alta} altas.\n` +
+        'No modifica ITV ni ACTIVO/INACTIVO.',
+    )
+    if (!ok) return
+    setApplying(true)
+    setError('')
+    setEmpresaApply(null)
+    const formData = new FormData()
+    formData.append('file', file)
+    try {
+      const res = await importadorApi.sincronizarEmpresas(formData)
+      setEmpresaApply(res.data)
+    } catch (err: any) {
+      setError(formatApiError(err, 'Error al sincronizar empresas.'))
+    } finally {
+      setApplying(false)
     }
   }
 
@@ -178,10 +253,16 @@ export default function ImportadorPage() {
               <span>{file ? file.name : 'Buscar archivo...'}</span>
             </label>
             {file && (
+              <>
               <button className="btn btn-primary" onClick={handlePreview} disabled={loading || applying}>
                 <Search size={16} />
-                <span>{loading ? 'Analizando...' : 'Analizar cruce'}</span>
+                <span>{loading ? 'Analizando...' : 'Analizar ITV'}</span>
               </button>
+              <button className="btn btn-secondary" onClick={handlePreviewEmpresas} disabled={loading || applying}>
+                <Building2 size={16} />
+                <span>Analizar empresas</span>
+              </button>
+              </>
             )}
           </div>
         </div>
@@ -201,6 +282,100 @@ export default function ImportadorPage() {
           >
             <AlertCircle size={20} style={{ flexShrink: 0 }} />
             <div>{error}</div>
+          </div>
+        )}
+
+        {empresaPreview && (
+          <div style={{ marginTop: '1.5rem', textAlign: 'left' }}>
+            <div
+              style={{
+                padding: '1rem',
+                backgroundColor: '#F5F3FF',
+                color: '#4C1D95',
+                borderRadius: 8,
+                marginBottom: '1rem',
+              }}
+            >
+              <strong>{empresaPreview.mensaje}</strong>
+              <div style={{ fontSize: '0.85rem', marginTop: 4 }}>
+                Alinea <code>bus_empresa</code> con EMPRESA-LINEA del Excel (ej. Capiatá → 001B).
+              </div>
+            </div>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                gap: '0.75rem',
+                marginBottom: '1.25rem',
+              }}
+            >
+              <Stat label="Filas Excel" value={empresaPreview.total_excel} />
+              <Stat label="Match bus" value={empresaPreview.matched_bus} />
+              <Stat label="Ya correctas" value={empresaPreview.ok_mismo_eot} />
+              <Stat label="A transferir" value={empresaPreview.a_transferir} tone="warn" />
+              <Stat label="Altas" value={empresaPreview.a_alta} tone="warn" />
+              <Stat label="Sin mapear EOT" value={empresaPreview.sin_match_eot} tone="warn" />
+              <Stat label="Sin bus en DB" value={empresaPreview.sin_bus} />
+            </div>
+            {Object.keys(empresaPreview.por_eot_destino || {}).length > 0 && (
+              <div style={{ marginBottom: '1rem', fontSize: '0.875rem' }}>
+                <strong>Destinos (cambios):</strong>{' '}
+                {Object.entries(empresaPreview.por_eot_destino)
+                  .map(([k, v]) => `${k}: ${v}`)
+                  .join(' · ')}
+              </div>
+            )}
+            <SampleTable
+              title="Muestra transferencias"
+              rows={empresaPreview.muestra_transferencias}
+              cols={['rua', 'chassis', 'de', 'a', 'empresa_excel']}
+            />
+            <SampleTable
+              title="Muestra altas (sin empresa vigente)"
+              rows={empresaPreview.muestra_altas}
+              cols={['rua', 'chassis', 'a', 'empresa_excel']}
+            />
+            <SampleTable
+              title="Muestra sin mapear a EOT"
+              rows={empresaPreview.muestra_sin_eot}
+              cols={['fila', 'rua', 'empresa_excel', 'codigo']}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={handleAplicarEmpresas}
+              disabled={applying || loading || (empresaPreview.a_transferir + empresaPreview.a_alta) === 0}
+              style={{ width: '100%', marginTop: '0.5rem' }}
+            >
+              <Play size={16} />
+              <span>
+                {applying
+                  ? 'Sincronizando empresas...'
+                  : `Aplicar asignaciones (${empresaPreview.a_transferir + empresaPreview.a_alta})`}
+              </span>
+            </button>
+            {empresaApply && (
+              <div
+                style={{
+                  marginTop: '1rem',
+                  padding: '1rem',
+                  backgroundColor: '#DCFCE7',
+                  color: '#166534',
+                  borderRadius: 8,
+                }}
+              >
+                <strong>{empresaApply.mensaje}</strong>
+                <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
+                  <li>Transferencias: {empresaApply.transferencias}</li>
+                  <li>Altas: {empresaApply.altas}</li>
+                  <li>Sin cambio: {empresaApply.sin_cambio}</li>
+                </ul>
+                {empresaApply.errores?.length > 0 && (
+                  <div style={{ marginTop: 8, color: '#92400E' }}>
+                    <strong>{empresaApply.errores.length} errores</strong>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

@@ -44,7 +44,7 @@ export default function EmpresasPage() {
         <div className="search-bar" style={{ maxWidth: '360px' }}>
           <Search size={15} className="icon" />
           <input
-            placeholder="Buscar empresa..."
+            placeholder="Buscar por nombre, línea, código o email..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
           />

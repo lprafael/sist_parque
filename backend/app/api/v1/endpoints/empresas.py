@@ -99,7 +99,14 @@ async def listar_empresas(
     q = select(Eot)
     filters = []
     if search:
-        filters.append(Eot.eot_nombre.ilike(f"%{search}%"))
+        term = f"%{search.strip()}%"
+        # Nombre CID + línea + hex + email (Excel usa alias comercial p.ej. ADUSA)
+        filters.append(or_(
+            Eot.eot_nombre.ilike(term),
+            Eot.eot_linea.ilike(term),
+            Eot.id_eot_vmt_hex.ilike(term),
+            Eot.e_mail.ilike(term),
+        ))
     if solo_activas:
         eots_con_parque = (
             select(BusEmpresa.id_eot)

@@ -26,11 +26,13 @@ function diasLabel(venc: string | null) {
 export default function BusesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const empresaParam = searchParams.get('empresa') ?? ''
+  const estadoBusParam = searchParams.get('estado_bus') ?? ''
+  const estadoItvParam = searchParams.get('estado_itv') ?? ''
 
   const [search, setSearch]           = useState('')
   const [page, setPage]               = useState(1)
-  const [estadoBus, setEstadoBus]     = useState('')
-  const [estadoItv, setEstadoItv]     = useState('')
+  const [estadoBus, setEstadoBus]     = useState(estadoBusParam)
+  const [estadoItv, setEstadoItv]     = useState(estadoItvParam)
   const [empresa, setEmpresa]         = useState(empresaParam)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [busToEdit, setBusToEdit]     = useState<any>(null)
@@ -43,10 +45,13 @@ export default function BusesPage() {
 
   const PAGE_SIZE = 25
 
-  // Sincronizar parámetro URL si cambia externamente
+  // Sincronizar parámetros URL si cambian externamente (Dashboard → lista)
   useEffect(() => {
     setEmpresa(empresaParam)
-  }, [empresaParam])
+    setEstadoBus(estadoBusParam)
+    setEstadoItv(estadoItvParam)
+    setPage(1)
+  }, [empresaParam, estadoBusParam, estadoItvParam])
 
   // Catálogo de empresas permisionarias para el dropdown de filtro
   const { data: empresasData } = useQuery<{ data: { items: any[] } }>({
@@ -76,15 +81,21 @@ export default function BusesPage() {
   const total = data?.data?.total ?? 0
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
+  const syncParams = (next: { empresa?: string; estado_bus?: string; estado_itv?: string }) => {
+    const p = new URLSearchParams()
+    const emp = next.empresa !== undefined ? next.empresa : empresa
+    const eb = next.estado_bus !== undefined ? next.estado_bus : estadoBus
+    const ei = next.estado_itv !== undefined ? next.estado_itv : estadoItv
+    if (emp) p.set('empresa', emp)
+    if (eb) p.set('estado_bus', eb)
+    if (ei) p.set('estado_itv', ei)
+    setSearchParams(p)
+  }
+
   const handleEmpresaChange = (val: string) => {
     setEmpresa(val)
     setPage(1)
-    if (val) {
-      setSearchParams({ empresa: val })
-    } else {
-      searchParams.delete('empresa')
-      setSearchParams(searchParams)
-    }
+    syncParams({ empresa: val })
   }
 
   const handleOpenCreate = () => {
@@ -150,13 +161,23 @@ export default function BusesPage() {
           </select>
 
           <select className="form-control" style={{ width: '160px' }}
-            value={estadoBus} onChange={e => { setEstadoBus(e.target.value); setPage(1) }}>
+            value={estadoBus} onChange={e => {
+              const val = e.target.value
+              setEstadoBus(val)
+              setPage(1)
+              syncParams({ estado_bus: val })
+            }}>
             <option value="">Todos los estados</option>
             <option value="ACTIVO">Activo</option>
             <option value="INACTIVO">Inactivo</option>
           </select>
           <select className="form-control" style={{ width: '180px' }}
-            value={estadoItv} onChange={e => { setEstadoItv(e.target.value); setPage(1) }}>
+            value={estadoItv} onChange={e => {
+              const val = e.target.value
+              setEstadoItv(val)
+              setPage(1)
+              syncParams({ estado_itv: val })
+            }}>
             <option value="">Todos los ITV</option>
             <option value="VIGENTE">ITV Vigente</option>
             <option value="POR_VENCER">Por Vencer</option>

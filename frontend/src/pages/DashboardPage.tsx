@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { dashboardApi, alertasApi } from '../api'
 import { Trash2 } from 'lucide-react'
 import {
@@ -7,14 +8,19 @@ import {
 } from 'recharts'
 
 
-function KpiCard({ value, label, icon, color, action }: {
-  value: number | string; label: string; icon: string; color: string; action?: React.ReactNode
+function KpiCard({ value, label, icon, color, to, action }: {
+  value: number | string
+  label: string
+  icon: string
+  color: string
+  to?: string
+  action?: React.ReactNode
 }) {
-  return (
-    <div className="kpi-card" style={{ position: 'relative' }}>
+  const inner = (
+    <>
       <div className={`kpi-icon ${color}`}>{icon}</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div>
             <div className="kpi-value">{value}</div>
             <div className="kpi-label">{label}</div>
@@ -22,6 +28,24 @@ function KpiCard({ value, label, icon, color, action }: {
           {action}
         </div>
       </div>
+    </>
+  )
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className="kpi-card"
+        style={{ position: 'relative', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+      >
+        {inner}
+      </Link>
+    )
+  }
+
+  return (
+    <div className="kpi-card" style={{ position: 'relative' }}>
+      {inner}
     </div>
   )
 }
@@ -115,27 +139,79 @@ export default function DashboardPage() {
     <div>
       {/* KPIs */}
       <div className="kpi-grid">
-        <KpiCard value={kpis?.total_buses ?? 0}     label="Total Buses"      icon="🚌" color="blue" />
-        <KpiCard value={kpis?.buses_activos ?? 0}   label="Buses Activos"    icon="✅" color="green" />
-        <KpiCard value={kpis?.itv_vigente ?? 0}     label="ITV Vigentes"     icon="🔧" color="cyan" />
-        <KpiCard value={kpis?.itv_por_vencer ?? 0}  label="ITV Por Vencer"   icon="⚠️" color="amber" />
-        <KpiCard value={kpis?.itv_vencido ?? 0}     label="ITV Vencidas"     icon="❌" color="red" />
-        <KpiCard 
-          value={kpis?.alertas_pendientes ?? 0} 
-          label="Alertas Pendientes" 
-          icon="🔔" 
+        <KpiCard
+          value={kpis?.total_buses ?? 0}
+          label="Total Buses"
+          icon="🚌"
+          color="blue"
+          to="/buses"
+        />
+        <KpiCard
+          value={kpis?.buses_activos ?? 0}
+          label="Buses Activos"
+          icon="✅"
+          color="green"
+          to="/buses?estado_bus=ACTIVO"
+        />
+        <KpiCard
+          value={kpis?.itv_vigente ?? 0}
+          label="ITV Vigentes"
+          icon="🔧"
+          color="cyan"
+          to="/buses?estado_itv=VIGENTE"
+        />
+        <KpiCard
+          value={kpis?.itv_por_vencer ?? 0}
+          label="ITV Por Vencer"
+          icon="⚠️"
           color="amber"
+          to="/buses?estado_itv=POR_VENCER"
+        />
+        <KpiCard
+          value={kpis?.itv_vencido ?? 0}
+          label="ITV Vencidas"
+          icon="❌"
+          color="red"
+          to="/buses?estado_itv=VENCIDO"
+        />
+        <KpiCard
+          value={kpis?.seguros_vigentes ?? 0}
+          label="Seguros Vigentes"
+          icon="🛡️"
+          color="green"
+          to="/seguros?estado=VIGENTE"
+        />
+        <KpiCard
+          value={kpis?.alertas_pendientes ?? 0}
+          label="Alertas Pendientes"
+          icon="🔔"
+          color="amber"
+          to="/alertas?estado=PENDIENTE"
           action={
-            <button 
-              onClick={handleLimpiarAlertas} 
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleLimpiarAlertas()
+              }}
               disabled={limpiarAlertasMutation.isPending}
-              className="btn btn-secondary btn-sm" 
-              style={{ padding: '4px 8px', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px', background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}
+              className="btn btn-secondary btn-sm"
+              style={{
+                padding: '4px 8px',
+                fontSize: '0.72rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                marginTop: '2px',
+                background: 'rgba(239,68,68,0.15)',
+                color: '#f87171',
+                border: '1px solid rgba(239,68,68,0.3)',
+              }}
               title="Borrar todas las alertas pendientes"
             >
               <Trash2 size={12} /> Borrar
             </button>
-          } 
+          }
         />
       </div>
 

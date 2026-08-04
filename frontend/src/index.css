@@ -315,8 +315,8 @@ a:hover { color: var(--brand-300); }
   display: flex;
   align-items: center;
   gap: 16px;
-  transition: all var(--transition);
   position: relative;
+  transition: all var(--transition);
   overflow: hidden;
 }
 

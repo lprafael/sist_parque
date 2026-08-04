@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { alertasApi } from '../api'
 import { Bell, Check, EyeOff, RefreshCw, Filter } from 'lucide-react'
@@ -15,12 +16,20 @@ const tipoIcon: Record<string, string> = {
 }
 
 export default function AlertasPage() {
-  const [estado, setEstado]     = useState('PENDIENTE')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const estadoParam = searchParams.get('estado') ?? 'PENDIENTE'
+
+  const [estado, setEstado]     = useState(estadoParam)
   const [prioridad, setPrioridad] = useState('')
   const [page, setPage]         = useState(1)
   const { usuario } = useAuthStore()
   const qc = useQueryClient()
   const PAGE_SIZE = 20
+
+  useEffect(() => {
+    setEstado(estadoParam)
+    setPage(1)
+  }, [estadoParam])
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['alertas', page, estado, prioridad],
@@ -90,7 +99,12 @@ export default function AlertasPage() {
           {(['PENDIENTE', 'ATENDIDA', 'IGNORADA', ''] as const).map(e => (
             <button key={e}
               className={`btn btn-sm ${estado === e ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => { setEstado(e as string); setPage(1) }}>
+              onClick={() => {
+                setEstado(e as string)
+                setPage(1)
+                if (e) setSearchParams({ estado: e })
+                else setSearchParams({})
+              }}>
               {e || 'Todas'}
             </button>
           ))}

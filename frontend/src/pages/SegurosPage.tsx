@@ -1,20 +1,36 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { segurosApi } from '../api'
 import { Search, RefreshCw } from 'lucide-react'
 import SeguroQuickForm from '../components/seguros/SeguroQuickForm'
 
 export default function SegurosPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const estadoParam = searchParams.get('estado') ?? ''
+
   const [search, setSearch] = useState('')
+  const [estado, setEstado] = useState(estadoParam)
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
 
+  useEffect(() => {
+    setEstado(estadoParam)
+    setPage(1)
+  }, [estadoParam])
+
   const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total?: number } }>({
-    queryKey: ['seguros', page, search],
-    queryFn: () => segurosApi.listar({ page, page_size: PAGE_SIZE, ...(search && { search }) }),
+    queryKey: ['seguros', page, search, estado],
+    queryFn: () => segurosApi.listar({
+      page,
+      page_size: PAGE_SIZE,
+      ...(search && { search }),
+      ...(estado && { estado }),
+    }),
   })
 
   const items = data?.data?.items ?? []
+  const total = data?.data?.total ?? items.length
 
   return (
     <div>
@@ -22,7 +38,7 @@ export default function SegurosPage() {
         <div>
           <h1 className="page-header-title">Seguros de Buses</h1>
           <p className="page-header-sub">
-            Carga: Empresa EOT → RUA filtrada → tipo → fechas
+            {total} póliza(s) · Carga: Empresa EOT → RUA filtrada → tipo → fechas
           </p>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={() => refetch()}>
@@ -33,16 +49,35 @@ export default function SegurosPage() {
       <SeguroQuickForm onSuccess={() => { setPage(1); void refetch() }} />
 
       <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
-        <div className="search-bar">
-          <Search size={15} className="icon" />
-          <input
-            placeholder="Buscar por N° Póliza o Bus..."
-            value={search}
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="search-bar">
+            <Search size={15} className="icon" />
+            <input
+              placeholder="Buscar por N° Póliza o Bus..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value)
+                setPage(1)
+              }}
+            />
+          </div>
+          <select
+            className="form-control"
+            style={{ width: '180px' }}
+            value={estado}
             onChange={(e) => {
-              setSearch(e.target.value)
+              const val = e.target.value
+              setEstado(val)
               setPage(1)
+              if (val) setSearchParams({ estado: val })
+              else setSearchParams({})
             }}
-          />
+          >
+            <option value="">Todos los estados</option>
+            <option value="VIGENTE">Vigente</option>
+            <option value="POR_VENCER">Por Vencer</option>
+            <option value="VENCIDO">Vencido</option>
+          </select>
         </div>
       </div>
 

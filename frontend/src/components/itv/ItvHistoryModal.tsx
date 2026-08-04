@@ -26,10 +26,9 @@ export default function ItvHistoryModal({
   if (!isOpen) return null
 
   const rawItems = data?.data ?? []
-  // Deduplicar registros idénticos por combinación de fechas para evitar duplicados en la vista
+  // Deduplicar por fechas de ITV (ignora “anterior” distinto por filas duplicadas)
   const historyItems = rawItems.filter((item: any, index: number, self: any[]) =>
     index === self.findIndex((t: any) => (
-      t.fecha_vencimiento_anterior === item.fecha_vencimiento_anterior &&
       t.fecha_itv_actual === item.fecha_itv_actual &&
       t.fecha_vencimiento_actual === item.fecha_vencimiento_actual
     ))

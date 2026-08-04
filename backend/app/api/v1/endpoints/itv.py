@@ -137,17 +137,27 @@ async def actualizar_itv(
 
 @router.get("/historial/{id_bus}", response_model=list[HistorialItvOut])
 async def historial_itv_bus(id_bus: int, db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
-    # Obtener todas las ITVs históricas del bus ordenadas cronológicamente por fecha de vencimiento
+    # Orden cronológico por vencimiento, luego registro (para deduplicar fechas iguales)
     records = (await db.execute(
         select(ItvBus)
         .where(ItvBus.id_bus == id_bus)
-        .order_by(ItvBus.fecha_vencimiento.asc())
+        .order_by(ItvBus.fecha_vencimiento.asc(), ItvBus.fecha_registro.asc(), ItvBus.id_itv.asc())
     )).scalars().all()
 
+    # Una fila por (fecha_itv, fecha_vencimiento): conservar la más antigua
+    seen_keys: set[tuple] = set()
+    unique: list[ItvBus] = []
+    for rec in records:
+        key = (rec.fecha_itv, rec.fecha_vencimiento)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        unique.append(rec)
+
     historial = []
-    for idx, rec in enumerate(records):
-        prev_venc = records[idx - 1].fecha_vencimiento if idx > 0 else None
-        diff_days = (rec.fecha_itv - prev_venc).days if prev_venc else None
+    for idx, rec in enumerate(unique):
+        prev_venc = unique[idx - 1].fecha_vencimiento if idx > 0 else None
+        diff_days = (rec.fecha_itv - prev_venc).days if prev_venc and rec.fecha_itv else None
 
         historial.append(HistorialItvOut(
             id_historial=rec.id_itv,
@@ -160,5 +170,4 @@ async def historial_itv_bus(id_bus: int, db: AsyncSession = Depends(get_db), _=D
             fecha_registro=rec.fecha_registro
         ))
 
-    # Devolver orden descendente para mostrar lo más reciente primero
     return list(reversed(historial))

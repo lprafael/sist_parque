@@ -668,10 +668,14 @@ async def apply_import(
                         current is not None
                         and current.fecha_itv == fecha_itv
                         and current.fecha_vencimiento == r.vencimiento_itv
-                        and (current.resultado_itv or None) == (r.resultado_itv or current.resultado_itv)
-                        and (current.centro_itv or None) == (r.taller or current.centro_itv)
                     )
                     if same:
+                        # Actualizar metadatos si el Excel trae más info; no crear otra fila
+                        if r.resultado_itv and not current.resultado_itv:
+                            current.resultado_itv = r.resultado_itv
+                        if r.taller and not current.centro_itv:
+                            current.centro_itv = r.taller[:200]
+                        current.es_vigente = True
                         for extra in vigentes[1:]:
                             extra.es_vigente = False
                         itv_by_bus[bus.id_bus] = [current]

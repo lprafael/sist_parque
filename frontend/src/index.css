@@ -42,6 +42,7 @@
   --border:     rgba(255,255,255,0.08);
   --border-hover: rgba(255,255,255,0.15);
   --border-focus: rgba(63,81,181,0.7);
+  --bg-input-focus: #2a2f4a;
 
   /* Text */
   --text-primary:   #f0f2ff;
@@ -76,6 +77,7 @@
   --border:        rgba(26, 35, 126, 0.12);
   --border-hover:  rgba(26, 35, 126, 0.22);
   --border-focus:  rgba(63, 81, 181, 0.55);
+  --bg-input-focus: #ffffff;
 
   --text-primary:   #1a237e;
   --text-secondary: #4a5568;
@@ -555,7 +557,12 @@ tbody td {
 .form-control:focus {
   border-color: var(--brand-400);
   box-shadow: 0 0 0 3px rgba(63,81,181,0.2);
-  background: rgba(36,40,64,0.9);
+  background: var(--bg-input-focus);
+}
+
+.form-control:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-hover);
+  background: var(--bg-input-focus);
 }
 
 .form-control::placeholder { color: var(--text-muted); }

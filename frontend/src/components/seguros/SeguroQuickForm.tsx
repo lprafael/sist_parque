@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Building2, X } from 'lucide-react'
 import { empresasApi, segurosApi } from '../../api'
 import { formatApiError } from '../../api/client'
 
@@ -41,6 +42,8 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  /** Empresa fijada: no se limpia al guardar ni con Tab/Enter */
+  const [empresaFija, setEmpresaFija] = useState(false)
 
   const [empOpen, setEmpOpen] = useState(false)
   const [empHi, setEmpHi] = useState(0)
@@ -132,8 +135,9 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
   }, [])
 
   useEffect(() => {
-    focusAt(0)
-  }, [focusAt])
+    if (!empresaFija) focusAt(0)
+    else focusAt(1)
+  }, [focusAt, empresaFija])
 
   useEffect(() => {
     if (!form.id_tipo_seguro && tipos.length) {
@@ -164,10 +168,27 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
       rua: '',
     }))
     setBus(null)
+    setEmpresaFija(true)
     setEmpOpen(false)
     setRuaOpen(false)
     setError('')
-    focusAt(1)
+    setStatus('')
+  }
+
+  const cambiarEmpresa = () => {
+    setEmpresaFija(false)
+    setForm((p) => ({
+      ...p,
+      id_eot: '',
+      empresa_label: '',
+      empresa_q: '',
+      rua: '',
+    }))
+    setBus(null)
+    setEmpOpen(true)
+    setRuaOpen(false)
+    setError('')
+    setStatus('')
   }
 
   const selectBus = (b: BusHit) => {
@@ -178,24 +199,37 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
     focusAt(2)
   }
 
-  const resetForm = (keepEmpresaTipo = true) => {
-    const keep = keepEmpresaTipo
-      ? {
-          id_eot: form.id_eot,
-          empresa_label: form.empresa_label,
-          empresa_q: form.empresa_label || form.empresa_q,
-          id_tipo_seguro: form.id_tipo_seguro,
-        }
-      : {}
-    setForm({ ...emptyForm(), ...keep })
+  /** Tras guardar: limpia RUA/póliza/vencimiento; mantiene empresa (+ tipo y compañía). */
+  const resetParaSiguiente = () => {
+    setForm((prev) => ({
+      ...emptyForm(),
+      id_eot: prev.id_eot,
+      empresa_label: prev.empresa_label,
+      empresa_q: prev.empresa_label || prev.empresa_q,
+      id_tipo_seguro: prev.id_tipo_seguro,
+      id_compania: prev.id_compania,
+      fecha_inicio: new Date().toISOString().slice(0, 10),
+    }))
     setBus(null)
     setError('')
     setEmpOpen(false)
     setRuaOpen(false)
-    requestAnimationFrame(() => {
-      if (keep.id_eot) focusAt(1)
-      else focusAt(0)
-    })
+    setEmpresaFija(true)
+    requestAnimationFrame(() => focusAt(1))
+  }
+
+  const limpiarRua = () => {
+    setForm((p) => ({
+      ...p,
+      rua: '',
+      fecha_vencimiento: '',
+      numero_poliza: '',
+      fecha_inicio: new Date().toISOString().slice(0, 10),
+    }))
+    setBus(null)
+    setError('')
+    setRuaOpen(false)
+    requestAnimationFrame(() => focusAt(1))
   }
 
   const submit = async () => {
@@ -205,6 +239,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
     try {
       if (!form.id_eot) {
         setError('Seleccioná una empresa EOT.')
+        setEmpresaFija(false)
         focusAt(0)
         return
       }
@@ -255,7 +290,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
         `Guardado: ${form.empresa_label} · ${resolved.rua || resolved.id_bus} · ${tipoNom} · vence ${form.fecha_vencimiento}`,
       )
       onSuccess()
-      resetForm(true)
+      resetParaSiguiente()
     } catch (err) {
       setError(formatApiError(err, 'No se pudo guardar el seguro.'))
       focusAt(1)
@@ -267,7 +302,8 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
   const onEmpresaKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
       e.preventDefault()
-      resetForm(false)
+      set('empresa_q', '')
+      setEmpOpen(false)
       return
     }
     if (e.key === 'ArrowDown') {
@@ -287,10 +323,6 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
         const pick = empresasFiltradas[Math.min(empHi, empresasFiltradas.length - 1)]
         selectEmpresa(pick)
       }
-      return
-    }
-    if (e.key === 'Tab' && !e.shiftKey && form.id_eot) {
-      setEmpOpen(false)
     }
   }
 
@@ -300,7 +332,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
       setForm((p) => ({ ...p, rua: '' }))
       setBus(null)
       setRuaOpen(false)
-      focusAt(0)
+      // Mantiene empresa fijada; solo limpia RUA
       return
     }
     if (e.key === 'ArrowDown') {
@@ -318,6 +350,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
       e.preventDefault()
       if (!form.id_eot) {
         setError('Primero seleccioná la empresa EOT.')
+        setEmpresaFija(false)
         focusAt(0)
         return
       }
@@ -337,7 +370,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
   ) => {
     if (e.key === 'Escape') {
       e.preventDefault()
-      resetForm(true)
+      limpiarRua()
       return
     }
     if (e.key !== 'Enter') return
@@ -359,7 +392,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
     maxHeight: 220,
     overflowY: 'auto',
     background: 'var(--bg-card, #fff)',
-    border: '1px solid var(--border-color, #e2e8f0)',
+    border: '1px solid var(--border, #e2e8f0)',
     borderRadius: 8,
     boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
   }
@@ -368,7 +401,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
     padding: '8px 10px',
     cursor: 'pointer',
     fontSize: '0.85rem',
-    background: active ? 'var(--primary-color, #2563eb)' : 'transparent',
+    background: active ? 'var(--brand-500, #2563eb)' : 'transparent',
     color: active ? '#fff' : 'inherit',
   })
 
@@ -378,7 +411,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
         <div>
           <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Carga rápida de seguro</div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Empresa → RUA (filtra al digitar) · ↑↓ elegir · Enter confirmar · Tab avanza · Esc limpia
+            Elegí empresa una vez · luego RUA → Tab/Enter · al guardar se mantiene la empresa
           </div>
         </div>
         {form.id_eot && (
@@ -416,47 +449,89 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
         {/* Empresa EOT */}
         <div className="form-group" style={{ marginBottom: 0, position: 'relative' }}>
           <label className="form-label">Empresa EOT *</label>
-          <input
-            ref={empresaRef}
-            className="form-control"
-            value={form.empresa_q}
-            autoComplete="off"
-            placeholder="Escribí nombre o línea..."
-            disabled={loading}
-            onFocus={() => setEmpOpen(true)}
-            onChange={(e) => {
-              set('empresa_q', e.target.value)
-              setForm((p) => ({ ...p, id_eot: '', empresa_label: '', rua: '' }))
-              setBus(null)
-              setEmpOpen(true)
-            }}
-            onKeyDown={onEmpresaKeyDown}
-            onBlur={() => {
-              // delay para permitir click en opción
-              setTimeout(() => setEmpOpen(false), 150)
-            }}
-          />
-          {empOpen && empresasFiltradas.length > 0 && (
-            <div style={dropdownStyle} role="listbox">
-              {empresasFiltradas.map((e, i) => (
+          {empresaFija && form.id_eot ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                minHeight: 38,
+                padding: '6px 10px',
+                borderRadius: 'var(--radius-md, 8px)',
+                border: '1px solid rgba(63,81,181,0.35)',
+                background: 'rgba(63,81,181,0.1)',
+              }}
+            >
+              <Building2 size={15} style={{ color: 'var(--brand-400)', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div
-                  key={e.id_eot_vmt_hex}
-                  role="option"
-                  aria-selected={i === empHi}
-                  style={itemStyle(i === empHi)}
-                  onMouseDown={(ev) => {
-                    ev.preventDefault()
-                    selectEmpresa(e)
+                  style={{
+                    fontWeight: 700,
+                    fontSize: '0.85rem',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
-                  onMouseEnter={() => setEmpHi(i)}
                 >
-                  <div style={{ fontWeight: 600 }}>{e.eot_nombre}</div>
-                  {e.eot_linea && (
-                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>Líneas: {e.eot_linea.trim()}</div>
-                  )}
+                  {form.empresa_label}
                 </div>
-              ))}
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  {form.id_eot} · fijada para carga rápida
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={cambiarEmpresa}
+                disabled={loading}
+                title="Cambiar empresa"
+                style={{ padding: '4px 8px', flexShrink: 0 }}
+              >
+                <X size={13} /> Cambiar
+              </button>
             </div>
+          ) : (
+            <>
+              <input
+                ref={empresaRef}
+                className="form-control"
+                value={form.empresa_q}
+                autoComplete="off"
+                placeholder="Ej: Ñanduti, línea, código..."
+                disabled={loading}
+                onFocus={() => setEmpOpen(true)}
+                onChange={(e) => {
+                  set('empresa_q', e.target.value)
+                  setEmpOpen(true)
+                }}
+                onKeyDown={onEmpresaKeyDown}
+                onBlur={() => setTimeout(() => setEmpOpen(false), 150)}
+              />
+              {empOpen && empresasFiltradas.length > 0 && (
+                <div style={dropdownStyle} role="listbox">
+                  {empresasFiltradas.map((e, i) => (
+                    <div
+                      key={e.id_eot_vmt_hex}
+                      role="option"
+                      aria-selected={i === empHi}
+                      style={itemStyle(i === empHi)}
+                      onMouseDown={(ev) => {
+                        ev.preventDefault()
+                        selectEmpresa(e)
+                      }}
+                      onMouseEnter={() => setEmpHi(i)}
+                    >
+                      <div style={{ fontWeight: 600 }}>{e.eot_nombre}</div>
+                      {e.eot_linea && (
+                        <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>
+                          Líneas: {e.eot_linea.trim()} · {e.id_eot_vmt_hex}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -515,7 +590,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             value={form.id_tipo_seguro}
             onChange={(e) => set('id_tipo_seguro', e.target.value)}
             onKeyDown={(e) => onFieldKeyDown(e, 2)}
-            disabled={loading}
+            disabled={loading || !form.id_eot}
           >
             {tipos.map((t) => (
               <option key={t.id_tipo_seguro} value={t.id_tipo_seguro}>
@@ -534,7 +609,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             value={form.fecha_vencimiento}
             onChange={(e) => set('fecha_vencimiento', e.target.value)}
             onKeyDown={(e) => onFieldKeyDown(e, 3)}
-            disabled={loading}
+            disabled={loading || !form.id_eot}
           />
         </div>
 
@@ -547,7 +622,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             value={form.fecha_inicio}
             onChange={(e) => set('fecha_inicio', e.target.value)}
             onKeyDown={(e) => onFieldKeyDown(e, 4)}
-            disabled={loading}
+            disabled={loading || !form.id_eot}
           />
         </div>
 
@@ -559,7 +634,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             value={form.id_compania}
             onChange={(e) => set('id_compania', e.target.value)}
             onKeyDown={(e) => onFieldKeyDown(e, 5)}
-            disabled={loading}
+            disabled={loading || !form.id_eot}
           >
             <option value="">— Sin compañía —</option>
             {companias.map((c) => (
@@ -580,27 +655,27 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             placeholder="Opcional"
             onChange={(e) => set('numero_poliza', e.target.value)}
             onKeyDown={(e) => onFieldKeyDown(e, 6)}
-            disabled={loading}
+            disabled={loading || !form.id_eot}
           />
         </div>
       </div>
 
-      <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+      <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button
           type="button"
           className="btn btn-primary btn-sm"
           onClick={() => void submit()}
-          disabled={loading}
+          disabled={loading || !form.id_eot}
         >
           {loading ? 'Guardando...' : 'Guardar (Enter en póliza)'}
         </button>
         <button
           type="button"
           className="btn btn-secondary btn-sm"
-          onClick={() => resetForm(true)}
-          disabled={loading}
+          onClick={limpiarRua}
+          disabled={loading || !form.id_eot}
         >
-          Limpiar RUA (mantener EOT)
+          Limpiar RUA (mantener empresa)
         </button>
       </div>
     </div>

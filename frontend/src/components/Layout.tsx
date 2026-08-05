@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import Sidebar from './Sidebar'
+import ThemeToggle from './ThemeToggle'
 import { useLocation } from 'react-router-dom'
 
 const pageTitles: Record<string, string> = {
@@ -26,6 +27,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               {new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
+            <ThemeToggle />
           </div>
         </header>
         <main className="page-content">{children}</main>

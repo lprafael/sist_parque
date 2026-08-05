@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { authApi } from '../api'
 import { Lock, User, Bus } from 'lucide-react'
+import ThemeToggle from '../components/ThemeToggle'
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
@@ -38,6 +39,10 @@ export default function LoginPage() {
       position: 'relative',
       overflow: 'hidden',
     }}>
+      <div style={{ position: 'absolute', top: 20, right: 20, zIndex: 2 }}>
+        <ThemeToggle />
+      </div>
+
       {/* Background glow */}
       <div style={{
         position: 'absolute',

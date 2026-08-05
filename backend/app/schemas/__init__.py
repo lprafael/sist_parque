@@ -434,6 +434,52 @@ class AuditoriaOut(BaseModel):
 
 
 # ============================================================
+# MENSAJES / FEEDBACK
+# ============================================================
+
+TIPOS_MENSAJE = ("sugerencia", "ajuste", "soporte", "ampliacion", "otro")
+
+
+class MensajeCreate(BaseModel):
+    mensaje: str
+    tipo: str = "soporte"
+
+    @field_validator("mensaje")
+    @classmethod
+    def mensaje_no_vacio(cls, v: str) -> str:
+        texto = (v or "").strip()
+        if not texto:
+            raise ValueError("El mensaje no puede estar vacío")
+        if len(texto) > 4000:
+            raise ValueError("El mensaje no puede superar 4000 caracteres")
+        return texto
+
+    @field_validator("tipo")
+    @classmethod
+    def tipo_valido(cls, v: str) -> str:
+        t = (v or "soporte").strip().lower()
+        if t not in TIPOS_MENSAJE:
+            raise ValueError(f"Tipo inválido. Use: {', '.join(TIPOS_MENSAJE)}")
+        return t
+
+
+class MensajeOut(BaseModel):
+    id: int
+    id_usuario: int
+    id_sistema: int
+    tipo: str
+    mensaje: str
+    fecha: datetime
+    entrante: bool
+    leido: bool
+    solucion: bool
+    id_padre: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================
 # PAGINACIÓN GENÉRICA
 # ============================================================
 

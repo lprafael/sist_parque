@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
+import FeedbackWidget from './FeedbackWidget'
 import { useLocation } from 'react-router-dom'
 
 const pageTitles: Record<string, string> = {
@@ -32,6 +33,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         </header>
         <main className="page-content">{children}</main>
       </div>
+      <FeedbackWidget />
     </div>
   )
 }

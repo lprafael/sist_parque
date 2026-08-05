@@ -1,6 +1,6 @@
 """
 Modelos ORM SQLAlchemy — mapeados al schema registro_habilitacion de PostgreSQL.
-Tablas: usuarios(sistema), buses, marcas, marcas_carroceria, tipos_carroceria,
+Tablas: usuarios(sistema), mensajes(sistema), buses, marcas, marcas_carroceria, tipos_carroceria,
 tipos_servicio, bus_empresa, itv_bus, seguros_bus, tipos_seguro, companias_seguros,
 documentos_bus, documentos_eot, alertas, auditoria, auxiliar
 """
@@ -122,6 +122,23 @@ class LogAcceso(Base):
     fecha = Column(DateTime, default=func.now())
     detalles = Column(JSONB)
     exitoso = Column(Boolean, default=True)
+
+
+class Mensaje(Base):
+    """Mensajes de feedback / soporte enviados por usuarios (fase 1: solo entrantes)."""
+    __tablename__ = "mensajes"
+    __table_args__ = {"schema": "sistema"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_usuario = Column(Integer, ForeignKey("sistema.usuarios.id"), nullable=False, index=True)
+    id_sistema = Column(Integer, ForeignKey("sistema.sistemas.id"), nullable=False, index=True)
+    tipo = Column(String(30), nullable=False, default="soporte")
+    mensaje = Column(Text, nullable=False)
+    fecha = Column(DateTime, default=func.now(), nullable=False)
+    entrante = Column(Boolean, default=True, nullable=False)
+    leido = Column(Boolean, default=False, nullable=False)
+    solucion = Column(Boolean, default=False, nullable=False)
+    id_padre = Column(Integer, ForeignKey("sistema.mensajes.id"), nullable=True)
 
 
 class Marca(Base):

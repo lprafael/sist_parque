@@ -150,3 +150,9 @@ export const reportesApi = {
     api.post('/reportes/planilla/cargar', formData, { timeout: 180000 }),
 }
 
+// ── Mensajes / Feedback ───────────────────────────
+export const mensajesApi = {
+  crear: (data: { tipo: string; mensaje: string }) =>
+    api.post('/mensajes', data),
+}
+

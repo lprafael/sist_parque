@@ -66,7 +66,7 @@ export const empresasApi = {
 
 // ── ITV ───────────────────────────────────────────
 export const itvApi = {
-  listar: (params?: Record<string, string | number>) =>
+  listar: (params?: Record<string, string | number | boolean>) =>
     api.get('/itv', { params }),
   obtener: (id: number) => api.get(`/itv/${id}`),
   registrar: (data: unknown) => api.post('/itv', data),

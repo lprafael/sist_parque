@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
+import { Download, RefreshCw } from 'lucide-react'
 import { reportesApi } from '../../api'
 import { formatApiError } from '../../api/client'
 
@@ -15,8 +15,17 @@ function formatCell(val: unknown): string {
 
 type Pestana = { key: string; label: string; titulo: string }
 
+function safeFilename(name: string): string {
+  return (name || 'reporte')
+    .replace(/[^\w\s\-áéíóúñÁÉÍÓÚÑ]/gi, '_')
+    .trim()
+    .replace(/\s+/g, '_')
+    .slice(0, 80) || 'reporte'
+}
+
 export default function PlanillaTabs() {
   const [tab, setTab] = useState('cuadro_edad')
+  const [downloading, setDownloading] = useState(false)
 
   const { data: pestanasData } = useQuery({
     queryKey: ['reportes-planilla-pestanas'],
@@ -48,6 +57,7 @@ export default function PlanillaTabs() {
   const filas: unknown[][] = reporte?.filas ?? []
   const headers: string[] = reporte?.headers ?? []
   const errMsg = error ? formatApiError(error, 'Error al cargar el reporte') : ''
+  const pestanaActiva = pestanas.find((p) => p.key === tab)
 
   // Separar filas de metadatos (título/nota) vs tabla
   const dataStart = filas.findIndex(
@@ -56,6 +66,28 @@ export default function PlanillaTabs() {
   const metaRows = dataStart > 0 ? filas.slice(0, dataStart) : []
   const tableHeader = dataStart >= 0 ? filas[dataStart] : headers
   const tableRows = dataStart >= 0 ? filas.slice(dataStart + 1) : filas
+
+  const handleDescargar = async () => {
+    if (!tab || downloading) return
+    setDownloading(true)
+    try {
+      const response = await reportesApi.planillaReporteExcel(tab)
+      const label = pestanaActiva?.label || reporte?.hoja || tab
+      const fecha = reporte?.fecha || new Date().toISOString().slice(0, 10)
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `Planilla_ITV_${safeFilename(label)}_${fecha}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      alert(formatApiError(err, 'Error al descargar el Excel de esta pestaña.'))
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <div>
@@ -68,15 +100,27 @@ export default function PlanillaTabs() {
               {reporte?.fuente ? ` · ${reporte.fuente}` : ''}
             </div>
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => void refetch()}
-            disabled={isFetching}
-          >
-            <RefreshCw size={14} />
-            <span>{isFetching ? 'Actualizando…' : 'Actualizar'}</span>
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => void handleDescargar()}
+              disabled={downloading || isLoading || !tab}
+              title={`Descargar Excel de ${pestanaActiva?.label || 'esta pestaña'}`}
+            >
+              <Download size={14} />
+              <span>{downloading ? 'Generando…' : 'Descargar Excel'}</span>
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => void refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw size={14} />
+              <span>{isFetching ? 'Actualizando…' : 'Actualizar'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -99,7 +143,7 @@ export default function PlanillaTabs() {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="planilla-toolbar">
           <div>
-            <strong>{reporte?.titulo || pestanas.find((p) => p.key === tab)?.titulo || tab}</strong>
+            <strong>{reporte?.titulo || pestanaActiva?.titulo || tab}</strong>
             <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginLeft: 10 }}>
               {reporte?.total_filas ?? 0} filas
               {isFetching ? ' · actualizando…' : ''}
@@ -110,6 +154,15 @@ export default function PlanillaTabs() {
               </div>
             )}
           </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => void handleDescargar()}
+            disabled={downloading || isLoading || !tab}
+          >
+            <Download size={14} />
+            <span>{downloading ? 'Generando…' : 'Excel'}</span>
+          </button>
         </div>
 
         {errMsg && (

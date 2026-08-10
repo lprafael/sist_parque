@@ -413,6 +413,117 @@ async def planilla_reporte_db(
         ) from exc
 
 
+def _safe_sheet_name(name: str) -> str:
+    cleaned = "".join(c if c not in '[]:*?/\\' else " " for c in (name or "Reporte"))
+    cleaned = cleaned.strip() or "Reporte"
+    return cleaned[:31]
+
+
+def _safe_filename(name: str) -> str:
+    cleaned = "".join(c if c.isalnum() or c in ("-", "_", " ") else "_" for c in (name or "reporte"))
+    cleaned = "_".join(cleaned.split()) or "reporte"
+    return cleaned[:80]
+
+
+@router.get("/planilla/reporte/{key}/excel")
+async def planilla_reporte_excel(
+    key: str,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Descarga en Excel el cuadro de la pestaña (datos en vivo desde la DB)."""
+    from app.services.planilla_reportes_db import obtener_reporte
+
+    try:
+        data = await obtener_reporte(db, key)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al generar el Excel '{key}': {exc}",
+        ) from exc
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = _safe_sheet_name(str(data.get("hoja") or key))
+
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    title_font = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
+    note_font = Font(name="Calibri", size=10, italic=True, color="64748B")
+    border_thin = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+    align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    headers = list(data.get("headers") or [])
+    filas = list(data.get("filas") or [])
+    header_row_idx = None
+    for i, row in enumerate(filas):
+        if (
+            isinstance(row, (list, tuple))
+            and headers
+            and len(row) >= 1
+            and str(row[0]) == str(headers[0])
+            and list(row)[: len(headers)] == headers
+        ):
+            header_row_idx = i
+            break
+        if isinstance(row, (list, tuple)) and headers and list(row) == headers:
+            header_row_idx = i
+            break
+
+    for r_idx, row in enumerate(filas, start=1):
+        cells = list(row) if isinstance(row, (list, tuple)) else [row]
+        for c_idx, val in enumerate(cells, start=1):
+            cell = ws.cell(row=r_idx, column=c_idx, value=val if val is not None else "")
+            if header_row_idx is not None and r_idx == header_row_idx + 1:
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = align_center
+                cell.border = border_thin
+            elif header_row_idx is not None and r_idx > header_row_idx + 1 and cells:
+                cell.border = border_thin
+                cell.alignment = align_center
+                if isinstance(val, float) and 0 < val < 1:
+                    cell.number_format = "0.0%"
+            elif r_idx == 1:
+                cell.font = title_font
+            elif r_idx == 2:
+                cell.font = note_font
+
+    if header_row_idx is not None:
+        ws.freeze_panes = f"A{header_row_idx + 2}"
+
+    max_col = ws.max_column or 1
+    for col_idx in range(1, max_col + 1):
+        max_len = 0
+        for row_idx in range(1, (ws.max_row or 1) + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if cell.value is not None:
+                max_len = max(max_len, min(len(str(cell.value)), 60))
+        letter = openpyxl.utils.get_column_letter(col_idx)
+        ws.column_dimensions[letter].width = max(max_len + 2, 12)
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    fname = _safe_filename(str(data.get("hoja") or key))
+    fecha = data.get("fecha") or date.today().isoformat()
+    filename = f"Planilla_ITV_{fname}_{fecha}.xlsx"
+
+    return StreamingResponse(
+        stream,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
 # ── Planilla Excel (opcional / legado) ──────────────────────
 
 @router.get("/planilla/estado")

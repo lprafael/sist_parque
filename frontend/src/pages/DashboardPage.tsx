@@ -175,15 +175,29 @@ export default function DashboardPage() {
           to="/buses?estado_itv=VENCIDO"
         />
         <KpiCard
-          value={kpis?.seguros_vigentes ?? 0}
-          label="Seguros Vigentes"
+          value={kpis?.seguros_pasajeros_vigentes ?? 0}
+          label="Seguro Pasajeros Vigentes"
           icon="🛡️"
           color="green"
           to="/seguros?estado=VIGENTE"
         />
         <KpiCard
-          value={kpis?.seguros_vencidos ?? 0}
-          label="Seguros Vencidos"
+          value={kpis?.seguros_pasajeros_vencidos ?? 0}
+          label="Seguro Pasajeros Vencidos"
+          icon="❌"
+          color="red"
+          to="/seguros?estado=VENCIDO"
+        />
+        <KpiCard
+          value={kpis?.seguros_terceros_vigentes ?? 0}
+          label="Seguro Terceros Vigentes"
+          icon="🛡️"
+          color="cyan"
+          to="/seguros?estado=VIGENTE"
+        />
+        <KpiCard
+          value={kpis?.seguros_terceros_vencidos ?? 0}
+          label="Seguro Terceros Vencidos"
           icon="❌"
           color="red"
           to="/seguros?estado=VENCIDO"
@@ -391,28 +405,51 @@ export default function DashboardPage() {
           <div className="card-header">
             <span className="card-title">Estado de Seguros</span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px', marginTop: '8px' }}>
             {[
               {
-                label: 'Vigentes',
-                value: Math.max(0, (kpis?.seguros_vigentes ?? 0) - (kpis?.seguros_por_vencer ?? 0)),
-                color: '#00c853',
-                icon: '✅',
+                titulo: 'Pasajeros',
+                vigentes: kpis?.seguros_pasajeros_vigentes ?? 0,
+                porVencer: kpis?.seguros_pasajeros_por_vencer ?? 0,
+                vencidos: kpis?.seguros_pasajeros_vencidos ?? 0,
               },
-              { label: 'Por Vencer', value: kpis?.seguros_por_vencer ?? 0, color: '#ffab00', icon: '⚠️' },
-              { label: 'Vencidos',   value: kpis?.seguros_vencidos ?? 0,   color: '#f44336', icon: '❌' },
-            ].map(({ label, value, color, icon }) => {
-              const total = (kpis?.seguros_vigentes ?? 0) + (kpis?.seguros_vencidos ?? 0)
-              const pct = total ? Math.round((value / total) * 100) : 0
+              {
+                titulo: 'Terceros',
+                vigentes: kpis?.seguros_terceros_vigentes ?? 0,
+                porVencer: kpis?.seguros_terceros_por_vencer ?? 0,
+                vencidos: kpis?.seguros_terceros_vencidos ?? 0,
+              },
+            ].map(({ titulo, vigentes, porVencer, vencidos }) => {
+              const ok = Math.max(0, vigentes - porVencer)
+              const total = vigentes + vencidos
+              const rows = [
+                { label: 'Vigentes', value: ok, color: '#00c853', icon: '✅' },
+                { label: 'Por Vencer', value: porVencer, color: '#ffab00', icon: '⚠️' },
+                { label: 'Vencidos', value: vencidos, color: '#f44336', icon: '❌' },
+              ]
               return (
-                <div key={label}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{icon} {label}</span>
-                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color }}>{value}</span>
+                <div key={titulo}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '10px', color: 'var(--text-primary)' }}>
+                    {titulo}
                   </div>
-                  <div style={{ height: '6px', background: 'var(--bg-input)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '3px',
-                      transition: 'width 1s ease' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {rows.map(({ label, value, color, icon }) => {
+                      const pct = total ? Math.round((value / total) * 100) : 0
+                      return (
+                        <div key={label}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                            <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{icon} {label}</span>
+                            <span style={{ fontSize: '0.82rem', fontWeight: 700, color }}>{value}</span>
+                          </div>
+                          <div style={{ height: '6px', background: 'var(--bg-input)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{
+                              height: '100%', width: `${pct}%`, background: color, borderRadius: '3px',
+                              transition: 'width 1s ease',
+                            }} />
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )

@@ -34,27 +34,39 @@ async def obtener_kpis(
     ))).scalar()
     itv_vencido    = (await db.execute(select(func.count()).select_from(ItvBus).where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento < hoy)))).scalar()
 
-    # Seguros — solo pólizas con seguro_vigente (el histórico no cuenta).
-    # Un bus puede tener más de un seguro vigente (p.ej. pasajeros + terceros).
-    # Se limita a buses ACTIVO del parque actual.
-    # Vigente = aún no venció (fecha >= hoy); Vencido = fecha < hoy.
-    seg_base = and_(
-        SeguroBus.seguro_vigente.is_(True),
-        SeguroBus.id_bus.in_(select(Bus.id_bus).where(Bus.estado_bus == "ACTIVO")),
-    )
-    seg_vigentes = (await db.execute(select(func.count()).select_from(SeguroBus).where(
-        and_(seg_base, SeguroBus.fecha_vencimiento >= hoy)
-    ))).scalar()
-    seg_por_vencer = (await db.execute(select(func.count()).select_from(SeguroBus).where(
-        and_(
-            seg_base,
-            SeguroBus.fecha_vencimiento >= hoy,
-            SeguroBus.fecha_vencimiento <= en_30,
+    # Seguros — separados por tipo (PASAJEROS / TERCEROS).
+    # Solo la póliza con seguro_vigente de buses ACTIVO (histórico excluido).
+    # Vigente = fecha >= hoy; por vencer ⊆ vigente (≤30 días); vencido = fecha < hoy.
+    async def _count_seguro_tipo(nombre_tipo: str, *extra_conds):
+        tipo_id_sq = select(TipoSeguro.id_tipo_seguro).where(
+            func.upper(TipoSeguro.nombre) == nombre_tipo.upper()
         )
-    ))).scalar()
-    seg_vencidos = (await db.execute(select(func.count()).select_from(SeguroBus).where(
-        and_(seg_base, SeguroBus.fecha_vencimiento < hoy)
-    ))).scalar()
+        return (await db.execute(
+            select(func.count()).select_from(SeguroBus).where(
+                and_(
+                    SeguroBus.seguro_vigente.is_(True),
+                    SeguroBus.id_tipo_seguro.in_(tipo_id_sq),
+                    SeguroBus.id_bus.in_(select(Bus.id_bus).where(Bus.estado_bus == "ACTIVO")),
+                    *extra_conds,
+                )
+            )
+        )).scalar() or 0
+
+    seg_pas_vig = await _count_seguro_tipo("PASAJEROS", SeguroBus.fecha_vencimiento >= hoy)
+    seg_pas_por = await _count_seguro_tipo(
+        "PASAJEROS",
+        SeguroBus.fecha_vencimiento >= hoy,
+        SeguroBus.fecha_vencimiento <= en_30,
+    )
+    seg_pas_ven = await _count_seguro_tipo("PASAJEROS", SeguroBus.fecha_vencimiento < hoy)
+
+    seg_ter_vig = await _count_seguro_tipo("TERCEROS", SeguroBus.fecha_vencimiento >= hoy)
+    seg_ter_por = await _count_seguro_tipo(
+        "TERCEROS",
+        SeguroBus.fecha_vencimiento >= hoy,
+        SeguroBus.fecha_vencimiento <= en_30,
+    )
+    seg_ter_ven = await _count_seguro_tipo("TERCEROS", SeguroBus.fecha_vencimiento < hoy)
 
     # Alertas
     alertas_criticas   = (await db.execute(select(func.count()).select_from(Alerta).where(
@@ -75,9 +87,12 @@ async def obtener_kpis(
         itv_vigente=itv_vigente,
         itv_por_vencer=itv_por_vencer,
         itv_vencido=itv_vencido,
-        seguros_vigentes=seg_vigentes,
-        seguros_por_vencer=seg_por_vencer,
-        seguros_vencidos=seg_vencidos,
+        seguros_pasajeros_vigentes=seg_pas_vig,
+        seguros_pasajeros_por_vencer=seg_pas_por,
+        seguros_pasajeros_vencidos=seg_pas_ven,
+        seguros_terceros_vigentes=seg_ter_vig,
+        seguros_terceros_por_vencer=seg_ter_por,
+        seguros_terceros_vencidos=seg_ter_ven,
         alertas_criticas=alertas_criticas,
         alertas_pendientes=alertas_pendientes,
         total_empresas=total_empresas,

@@ -406,9 +406,13 @@ class KpiDashboard(BaseModel):
     itv_vigente: int
     itv_por_vencer: int    # próximos 30 días
     itv_vencido: int
-    seguros_vigentes: int
-    seguros_por_vencer: int
-    seguros_vencidos: int
+    # Seguros por tipo (1 póliza vigente por bus+tipo; histórico excluido)
+    seguros_pasajeros_vigentes: int
+    seguros_pasajeros_por_vencer: int
+    seguros_pasajeros_vencidos: int
+    seguros_terceros_vigentes: int
+    seguros_terceros_por_vencer: int
+    seguros_terceros_vencidos: int
     alertas_criticas: int
     alertas_pendientes: int
     total_empresas: int

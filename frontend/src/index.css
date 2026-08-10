@@ -416,6 +416,7 @@ thead th {
   text-transform: uppercase;
   letter-spacing: 0.7px;
   white-space: nowrap;
+  background: var(--bg-surface);
 }
 
 tbody tr {
@@ -1036,11 +1037,18 @@ select.form-control option { background: var(--bg-input); }
   padding: 6px 8px;
   white-space: nowrap;
   font-weight: 700;
-  background: rgba(37, 99, 235, 0.08);
+  color: var(--text-primary);
+  background: var(--bg-input);
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   text-align: left;
+  box-shadow: 0 1px 0 var(--border);
+}
+
+[data-theme="light"] .planilla-table th {
+  background: var(--brand-50);
+  color: var(--brand-800);
 }
 
 /* ═══════════════════════════════════════════════════

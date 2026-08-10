@@ -21,7 +21,13 @@ const navItems = [
   { to: '/auditoria', icon: History,         label: 'Auditoría',   section: 'SISTEMA' },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({
+  open = true,
+  onClose,
+}: {
+  open?: boolean
+  onClose?: () => void
+}) {
   const { usuario, logout } = useAuthStore()
   const navigate = useNavigate()
 
@@ -44,7 +50,7 @@ export default function Sidebar() {
     : usuario?.username?.slice(0, 2).toUpperCase() ?? 'US'
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${open ? ' open' : ''}`} aria-hidden={!open}>
       <div className="sidebar-logo">
         <div className="logo-badge">VMT Paraguay</div>
         <div className="logo-title">Sistema de Gestión de<br />Parque Automotor</div>
@@ -61,6 +67,9 @@ export default function Sidebar() {
                 to={to}
                 end={to === '/'}
                 className={({ isActive }: { isActive: boolean }) => `nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => {
+                  if (window.innerWidth <= 768) onClose?.()
+                }}
               >
                 <Icon size={17} className="nav-icon" />
                 <span>{label}</span>

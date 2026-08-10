@@ -645,7 +645,8 @@ select.form-control option { background: var(--bg-input); }
   animation: fade-in 0.2s ease;
 }
 
-.modal {
+.modal,
+.modal-content {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
@@ -668,9 +669,33 @@ select.form-control option { background: var(--bg-input); }
   font-family: 'Outfit', sans-serif;
   font-size: 1.2rem;
   font-weight: 700;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.modal-close:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
 }
 
 .modal-body { padding: 20px 28px; }
+.modal-body .table-container {
+  background: var(--bg-card);
+}
 .modal-footer {
   padding: 16px 28px 24px;
   display: flex;

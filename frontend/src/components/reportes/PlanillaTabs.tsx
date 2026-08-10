@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Download, RefreshCw } from 'lucide-react'
 import { reportesApi } from '../../api'
 import { formatApiError } from '../../api/client'
+import CuadroEdadView from './CuadroEdadView'
 
 function formatCell(val: unknown): string {
   if (val === null || val === undefined || val === '') return ''
@@ -171,6 +172,8 @@ export default function PlanillaTabs() {
 
         {isLoading ? (
           <div className="loading-spinner"><div className="spinner" /></div>
+        ) : reporte?.layout === 'cuadro_edad_zonal' ? (
+          <CuadroEdadView data={reporte} />
         ) : (
           <div className="planilla-table-wrap">
             {metaRows.length > 0 && (

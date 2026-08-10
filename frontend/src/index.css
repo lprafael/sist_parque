@@ -1119,6 +1119,156 @@ select.form-control option { background: var(--bg-input); }
   color: var(--brand-800);
 }
 
+/* ── Cuadro de Edad (layout planilla ITV) ── */
+.cuadro-edad-wrap {
+  padding: 12px 14px 20px;
+  background: #fff;
+  color: #111;
+  overflow: auto;
+  max-height: min(78vh, 900px);
+}
+.cuadro-edad-title-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 6px;
+}
+.cuadro-edad-title {
+  flex: 1;
+  background: #f4e04d;
+  border: 1px solid #222;
+  font-weight: 800;
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 8px 10px;
+  letter-spacing: 0.01em;
+}
+.cuadro-edad-dpto {
+  min-width: 180px;
+  max-width: 240px;
+  background: #b7e4a8;
+  border: 1px solid #222;
+  font-weight: 700;
+  font-size: 0.72rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 6px 8px;
+}
+.cuadro-edad-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+}
+.cuadro-edad-meta-label { font-weight: 700; }
+.cuadro-edad-meta-value {
+  background: #9fd4f0;
+  border: 1px solid #222;
+  padding: 2px 10px;
+  font-weight: 700;
+}
+.cuadro-edad-banner {
+  background: #b7e4a8;
+  border: 1px solid #222;
+  text-align: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 6px;
+  margin-bottom: 10px;
+  letter-spacing: 0.04em;
+}
+.cuadro-edad-zonal { margin-bottom: 14px; }
+.cuadro-edad-zonal-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  background: #d9d9d9;
+  border: 1px solid #222;
+  border-bottom: none;
+  padding: 5px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.cuadro-edad-zonal-right {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.cuadro-edad-parque-actual em {
+  font-style: normal;
+  background: #9fd4f0;
+  border: 1px solid #333;
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+.cuadro-edad-table-scroll { overflow-x: auto; border: 1px solid #222; }
+.cuadro-edad-table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.7rem;
+  background: #fff;
+}
+.cuadro-edad-table th,
+.cuadro-edad-table td {
+  border: 1px solid #333;
+  padding: 3px 5px;
+  white-space: nowrap;
+  text-align: center;
+}
+.cuadro-edad-table thead th {
+  background: #e8e8e8;
+  font-weight: 700;
+}
+.cuadro-edad-table .col-linea,
+.cuadro-edad-table .col-empresa { text-align: left; }
+.cuadro-edad-table .col-empresa { min-width: 140px; }
+.cuadro-edad-table .col-anio { min-width: 36px; }
+.cuadro-edad-table tr.subtotal td {
+  background: #d9d9d9;
+  font-weight: 700;
+}
+.cuadro-edad-table tr.total td {
+  background: #c5d4e8;
+  font-weight: 800;
+}
+.cuadro-edad-table tr.sin-match td { background: #fff7ed; }
+.cuadro-edad-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  margin-top: 14px;
+  font-size: 0.78rem;
+}
+.cuadro-edad-leyenda-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cuadro-edad-leyenda .flecha { color: #555; }
+.cuadro-edad-leyenda .rango { color: #666; font-size: 0.72rem; }
+
+[data-theme="dark"] .cuadro-edad-wrap {
+  background: #1a1d27;
+  color: #e8eaf2;
+}
+[data-theme="dark"] .cuadro-edad-title { color: #111; }
+[data-theme="dark"] .cuadro-edad-dpto,
+[data-theme="dark"] .cuadro-edad-banner { color: #111; }
+[data-theme="dark"] .cuadro-edad-table { background: #12141c; }
+[data-theme="dark"] .cuadro-edad-table th,
+[data-theme="dark"] .cuadro-edad-table td { border-color: #555e8a; }
+[data-theme="dark"] .cuadro-edad-table thead th { background: #2a3148; color: #e8eaf2; }
+[data-theme="dark"] .cuadro-edad-zonal-head { background: #2a3148; color: #e8eaf2; }
+[data-theme="dark"] .cuadro-edad-table tr.subtotal td { background: #343b55; }
+[data-theme="dark"] .cuadro-edad-table tr.total td { background: #1e3a5f; }
+
 /* ═══════════════════════════════════════════════════
    THEME TOGGLE
 ═══════════════════════════════════════════════════ */

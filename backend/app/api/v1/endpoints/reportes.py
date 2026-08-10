@@ -448,66 +448,124 @@ async def planilla_reporte_excel(
     ws = wb.active
     ws.title = _safe_sheet_name(str(data.get("hoja") or key))
 
-    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
-    title_font = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
-    note_font = Font(name="Calibri", size=10, italic=True, color="64748B")
     border_thin = Border(
-        left=Side(style="thin", color="CBD5E1"),
-        right=Side(style="thin", color="CBD5E1"),
-        top=Side(style="thin", color="CBD5E1"),
-        bottom=Side(style="thin", color="CBD5E1"),
+        left=Side(style="thin", color="333333"),
+        right=Side(style="thin", color="333333"),
+        top=Side(style="thin", color="333333"),
+        bottom=Side(style="thin", color="333333"),
     )
     align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-
-    headers = list(data.get("headers") or [])
     filas = list(data.get("filas") or [])
-    header_row_idx = None
-    for i, row in enumerate(filas):
-        if (
-            isinstance(row, (list, tuple))
-            and headers
-            and len(row) >= 1
-            and str(row[0]) == str(headers[0])
-            and list(row)[: len(headers)] == headers
-        ):
-            header_row_idx = i
-            break
-        if isinstance(row, (list, tuple)) and headers and list(row) == headers:
-            header_row_idx = i
-            break
+    row_kinds = list(data.get("row_kinds") or [])
 
-    for r_idx, row in enumerate(filas, start=1):
-        cells = list(row) if isinstance(row, (list, tuple)) else [row]
-        for c_idx, val in enumerate(cells, start=1):
-            cell = ws.cell(row=r_idx, column=c_idx, value=val if val is not None else "")
-            if header_row_idx is not None and r_idx == header_row_idx + 1:
-                cell.fill = header_fill
-                cell.font = header_font
-                cell.alignment = align_center
-                cell.border = border_thin
-            elif header_row_idx is not None and r_idx > header_row_idx + 1 and cells:
+    if data.get("layout") == "cuadro_edad_zonal":
+        fills = {
+            "title": PatternFill(start_color="F4E04D", end_color="F4E04D", fill_type="solid"),
+            "dpto": PatternFill(start_color="B7E4A8", end_color="B7E4A8", fill_type="solid"),
+            "meta": PatternFill(start_color="9FD4F0", end_color="9FD4F0", fill_type="solid"),
+            "banner": PatternFill(start_color="B7E4A8", end_color="B7E4A8", fill_type="solid"),
+            "zonal": PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid"),
+            "col_header": PatternFill(start_color="E8E8E8", end_color="E8E8E8", fill_type="solid"),
+            "subtotal": PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid"),
+            "total": PatternFill(start_color="C5D4E8", end_color="C5D4E8", fill_type="solid"),
+        }
+        for r_idx, row in enumerate(filas, start=1):
+            kind = row_kinds[r_idx - 1] if r_idx - 1 < len(row_kinds) else "data"
+            cells = list(row) if isinstance(row, (list, tuple)) else [row]
+            for c_idx, val in enumerate(cells, start=1):
+                cell = ws.cell(row=r_idx, column=c_idx, value="" if val is None else val)
                 cell.border = border_thin
                 cell.alignment = align_center
-                if isinstance(val, float) and 0 < val < 1:
-                    cell.number_format = "0.0%"
-            elif r_idx == 1:
-                cell.font = title_font
-            elif r_idx == 2:
-                cell.font = note_font
+                if kind == "title":
+                    cell.fill = fills["dpto"] if c_idx == len(cells) else fills["title"]
+                    cell.font = Font(name="Calibri", size=11, bold=True)
+                elif kind == "meta" and c_idx == 3:
+                    cell.fill = fills["meta"]
+                    cell.font = Font(name="Calibri", size=10, bold=True)
+                elif kind == "banner":
+                    cell.fill = fills["banner"]
+                    cell.font = Font(name="Calibri", size=11, bold=True)
+                elif kind == "zonal":
+                    cell.fill = fills["zonal"]
+                    cell.font = Font(name="Calibri", size=10, bold=True)
+                elif kind == "col_header":
+                    cell.fill = fills["col_header"]
+                    cell.font = Font(name="Calibri", size=9, bold=True)
+                elif kind == "subtotal":
+                    cell.fill = fills["subtotal"]
+                    cell.font = Font(name="Calibri", size=9, bold=True)
+                elif kind == "total":
+                    cell.fill = fills["total"]
+                    cell.font = Font(name="Calibri", size=10, bold=True)
+                elif kind == "leyenda":
+                    cell.font = Font(name="Calibri", size=9, bold=True)
+                else:
+                    cell.font = Font(name="Calibri", size=9)
+        # Anchos típicos del cuadro
+        ws.column_dimensions["A"].width = 5
+        ws.column_dimensions["B"].width = 14
+        ws.column_dimensions["C"].width = 28
+        for col_idx in range(4, (ws.max_column or 4) + 1):
+            ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = 6
+    else:
+        header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+        header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+        title_font = Font(name="Calibri", size=13, bold=True, color="1E3A8A")
+        note_font = Font(name="Calibri", size=10, italic=True, color="64748B")
+        soft_border = Border(
+            left=Side(style="thin", color="CBD5E1"),
+            right=Side(style="thin", color="CBD5E1"),
+            top=Side(style="thin", color="CBD5E1"),
+            bottom=Side(style="thin", color="CBD5E1"),
+        )
 
-    if header_row_idx is not None:
-        ws.freeze_panes = f"A{header_row_idx + 2}"
+        headers = list(data.get("headers") or [])
+        header_row_idx = None
+        for i, row in enumerate(filas):
+            if isinstance(row, (list, tuple)) and headers and list(row) == headers:
+                header_row_idx = i
+                break
+            if (
+                isinstance(row, (list, tuple))
+                and headers
+                and len(row) >= 1
+                and str(row[0]) == str(headers[0])
+                and list(row)[: len(headers)] == headers
+            ):
+                header_row_idx = i
+                break
 
-    max_col = ws.max_column or 1
-    for col_idx in range(1, max_col + 1):
-        max_len = 0
-        for row_idx in range(1, (ws.max_row or 1) + 1):
-            cell = ws.cell(row=row_idx, column=col_idx)
-            if cell.value is not None:
-                max_len = max(max_len, min(len(str(cell.value)), 60))
-        letter = openpyxl.utils.get_column_letter(col_idx)
-        ws.column_dimensions[letter].width = max(max_len + 2, 12)
+        for r_idx, row in enumerate(filas, start=1):
+            cells = list(row) if isinstance(row, (list, tuple)) else [row]
+            for c_idx, val in enumerate(cells, start=1):
+                cell = ws.cell(row=r_idx, column=c_idx, value=val if val is not None else "")
+                if header_row_idx is not None and r_idx == header_row_idx + 1:
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = align_center
+                    cell.border = soft_border
+                elif header_row_idx is not None and r_idx > header_row_idx + 1 and cells:
+                    cell.border = soft_border
+                    cell.alignment = align_center
+                    if isinstance(val, float) and 0 < val < 1:
+                        cell.number_format = "0.0%"
+                elif r_idx == 1:
+                    cell.font = title_font
+                elif r_idx == 2:
+                    cell.font = note_font
+
+        if header_row_idx is not None:
+            ws.freeze_panes = f"A{header_row_idx + 2}"
+
+        max_col = ws.max_column or 1
+        for col_idx in range(1, max_col + 1):
+            max_len = 0
+            for row_idx in range(1, (ws.max_row or 1) + 1):
+                cell = ws.cell(row=row_idx, column=col_idx)
+                if cell.value is not None:
+                    max_len = max(max_len, min(len(str(cell.value)), 60))
+            letter = openpyxl.utils.get_column_letter(col_idx)
+            ws.column_dimensions[letter].width = max(max_len + 2, 12)
 
     stream = io.BytesIO()
     wb.save(stream)

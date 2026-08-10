@@ -217,7 +217,7 @@ export default function DashboardPage() {
 
       {/* Gráfico de Antigüedad de Buses (Líneas) */}
       <div className="card" style={{ marginBottom: '24px' }}>
-        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="card-header dashboard-card-header">
           <div>
             <span className="card-title">Antigüedad del Parque Automotor</span>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
@@ -253,10 +253,8 @@ export default function DashboardPage() {
         </ResponsiveContainer>
       </div>
 
-
-
       {/* Charts row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+      <div className="dashboard-charts-row">
         {/* Vencimientos próximos */}
         <div className="card">
           <div className="card-header">
@@ -343,7 +341,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Empresas + Marcas + alertas críticas */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+      <div className="dashboard-bottom-row">
         
         {/* Distribución por Marcas */}
         <div className="card">

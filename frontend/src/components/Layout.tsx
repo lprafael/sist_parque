@@ -74,7 +74,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           </button>
           <h1 className="topbar-title">{title}</h1>
           <div className="topbar-actions">
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            <span className="topbar-date" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
               {new Date().toLocaleDateString('es-PY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
             <ThemeToggle />

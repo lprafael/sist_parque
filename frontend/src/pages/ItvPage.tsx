@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { itvApi } from '../api'
 import { Search, RefreshCw, Plus, Edit2, Clock } from 'lucide-react'
@@ -9,11 +9,20 @@ export default function ItvPage() {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [selectedItv, setSelectedItv] = useState<any>(null)
   const [selectedBusId, setSelectedBusId] = useState<number>(0)
+
+  const anyModalOpen = isModalOpen || isHistoryOpen
+
+  useEffect(() => {
+    if (anyModalOpen) return
+    const t = window.setTimeout(() => searchRef.current?.focus(), 0)
+    return () => window.clearTimeout(t)
+  }, [anyModalOpen])
 
   const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total: number } }>({
     queryKey: ['itv', page, search],
@@ -46,9 +55,18 @@ export default function ItvPage() {
         <div className="search-bar">
           <Search size={15} className="icon" />
           <input
+            ref={searchRef}
+            autoFocus
             placeholder="Buscar por RUA o N° Certificado..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                refetch()
+              }
+            }}
+            aria-label="Buscar ITV por RUA o certificado"
           />
         </div>
       </div>

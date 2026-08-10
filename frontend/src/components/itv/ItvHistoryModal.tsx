@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, Calendar, Edit2 } from 'lucide-react'
 import { itvApi } from '../../api'
@@ -23,6 +24,19 @@ export default function ItvHistoryModal({
     enabled: isOpen && !!busId
   })
 
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   const rawItems = data?.data ?? []
@@ -43,7 +57,15 @@ export default function ItvHistoryModal({
   }
 
   return (
-    <div className="modal-overlay">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Historial de ITV"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
       <div className="modal-content" style={{ maxWidth: '750px' }}>
         <div className="modal-header">
           <h2 className="modal-title">
@@ -52,6 +74,7 @@ export default function ItvHistoryModal({
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {onEditItv && (
               <button
+                type="button"
                 className="btn btn-primary btn-sm"
                 style={{ fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px' }}
                 onClick={() => onEditItv(busId)}
@@ -59,7 +82,7 @@ export default function ItvHistoryModal({
                 <Edit2 size={13} /> Editar / Registrar ITV
               </button>
             )}
-            <button className="modal-close" onClick={onClose}>
+            <button type="button" className="modal-close" onClick={onClose} aria-label="Cerrar" tabIndex={-1}>
               <X size={20} />
             </button>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Save } from 'lucide-react'
 import { itvApi } from '../../api'
 import { formatApiError } from '../../api/client'
@@ -27,6 +27,7 @@ export default function ItvModal({
 }: ItvModalProps) {
   const isEdit = Boolean(itvToEdit?.id_itv)
   const busLocked = Boolean(itvToEdit?.id_bus)
+  const firstFieldRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
     id_bus: '',
@@ -65,6 +66,37 @@ export default function ItvModal({
     setError('')
   }, [itvToEdit, isOpen])
 
+  // Foco en el primer campo editable (alta y edición)
+  useEffect(() => {
+    if (!isOpen) return
+    const focusFirst = () => {
+      const el = firstFieldRef.current
+      if (!el || el.disabled) return
+      el.focus({ preventScroll: true })
+      if (el.type !== 'date' && el.type !== 'number') el.select()
+    }
+    const raf = requestAnimationFrame(focusFirst)
+    const t = window.setTimeout(focusFirst, 120)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(t)
+    }
+  }, [isOpen, itvToEdit?.id_itv, itvToEdit?.id_bus, busLocked])
+
+  // Escape para cerrar
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) {
+        e.preventDefault()
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [isOpen, loading, onClose])
+
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -98,11 +130,26 @@ export default function ItvModal({
   }
 
   return (
-    <div className="modal-overlay">
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={isEdit ? 'Editar ITV' : 'Nuevo Registro ITV'}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !loading) onClose()
+      }}
+    >
       <div className="modal-content" style={{ maxWidth: '500px' }}>
         <div className="modal-header">
           <h2 className="modal-title">{isEdit ? 'Editar ITV' : 'Nuevo Registro ITV'}</h2>
-          <button className="modal-close" onClick={onClose} disabled={loading}>
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+            disabled={loading}
+            aria-label="Cerrar"
+            tabIndex={-1}
+          >
             <X size={20} />
           </button>
         </div>
@@ -112,11 +159,14 @@ export default function ItvModal({
 
           <div style={{ display: 'grid', gap: '15px' }}>
             <div className="form-group">
-              <label className="form-label">ID Bus *</label>
+              <label className="form-label" htmlFor="itv-id-bus">ID Bus *</label>
               <input
+                id="itv-id-bus"
+                ref={busLocked ? undefined : firstFieldRef}
                 type="number"
                 className="form-control"
                 required
+                autoFocus={!busLocked}
                 value={formData.id_bus}
                 onChange={e => setFormData(p => ({ ...p, id_bus: e.target.value }))}
                 disabled={busLocked}
@@ -126,18 +176,22 @@ export default function ItvModal({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div className="form-group">
-                <label className="form-label">Fecha ITV *</label>
+                <label className="form-label" htmlFor="itv-fecha">Fecha ITV *</label>
                 <input
+                  id="itv-fecha"
+                  ref={busLocked ? firstFieldRef : undefined}
                   type="date"
                   className="form-control"
                   required
+                  autoFocus={busLocked}
                   value={formData.fecha_itv}
                   onChange={e => setFormData(p => ({ ...p, fecha_itv: e.target.value }))}
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Fecha Vencimiento *</label>
+                <label className="form-label" htmlFor="itv-venc">Fecha Vencimiento *</label>
                 <input
+                  id="itv-venc"
                   type="date"
                   className="form-control"
                   required
@@ -149,8 +203,9 @@ export default function ItvModal({
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
               <div className="form-group">
-                <label className="form-label">Resultado</label>
+                <label className="form-label" htmlFor="itv-resultado">Resultado</label>
                 <select
+                  id="itv-resultado"
                   className="form-control"
                   value={formData.resultado_itv}
                   onChange={e => setFormData(p => ({ ...p, resultado_itv: e.target.value }))}
@@ -160,8 +215,9 @@ export default function ItvModal({
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">N° Certificado</label>
+                <label className="form-label" htmlFor="itv-cert">N° Certificado</label>
                 <input
+                  id="itv-cert"
                   type="text"
                   className="form-control"
                   value={formData.numero_certificado}
@@ -171,8 +227,9 @@ export default function ItvModal({
             </div>
 
             <div className="form-group">
-              <label className="form-label">Centro ITV</label>
+              <label className="form-label" htmlFor="itv-centro">Centro ITV</label>
               <input
+                id="itv-centro"
                 type="text"
                 className="form-control"
                 value={formData.centro_itv}
@@ -181,8 +238,9 @@ export default function ItvModal({
             </div>
 
             <div className="form-group">
-              <label className="form-label">Observaciones</label>
+              <label className="form-label" htmlFor="itv-obs">Observaciones</label>
               <textarea
+                id="itv-obs"
                 className="form-control"
                 rows={3}
                 value={formData.observaciones}

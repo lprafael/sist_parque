@@ -18,7 +18,7 @@ export default function UsuariosPage() {
       <div className="page-header">
         <div>
           <h1 className="page-header-title">Usuarios y Permisos</h1>
-          <p className="page-header-sub">Administración de operadores y roles de acceso</p>
+          <p className="page-header-sub">Usuarios habilitados en SIGPA (Parque Automotor)</p>
         </div>
         <button className="btn btn-secondary btn-sm" onClick={() => refetch()}>
           <RefreshCw size={14} /> Actualizar

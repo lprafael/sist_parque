@@ -195,8 +195,18 @@ a:hover { color: var(--brand-300); }
 }
 
 .sidebar-logo {
-  padding: 24px 20px 20px;
+  padding: 20px 18px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.sidebar-logo-img {
+  display: block;
+  width: 100%;
+  max-width: 210px;
+  height: auto;
+  margin-bottom: 12px;
+  object-fit: contain;
+  object-position: left center;
 }
 
 .sidebar-logo .logo-title {
@@ -214,18 +224,7 @@ a:hover { color: var(--brand-300); }
 }
 
 .sidebar-logo .logo-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  background: linear-gradient(135deg, var(--brand-600), var(--brand-800));
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 3px 8px;
-  border-radius: 20px;
-  margin-bottom: 10px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  display: none;
 }
 
 .sidebar-nav {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { empresasApi } from '../api'
@@ -8,9 +8,15 @@ export default function EmpresasPage() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [page, setPage]     = useState(1)
+  const searchRef = useRef<HTMLInputElement>(null)
   const PAGE_SIZE = 20
 
-  const { data, isLoading } = useQuery<{ data: { items: any[]; total: number } }>({
+  useEffect(() => {
+    const t = window.setTimeout(() => searchRef.current?.focus(), 0)
+    return () => window.clearTimeout(t)
+  }, [])
+
+  const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total: number } }>({
     queryKey: ['empresas', page, search],
     queryFn: () => empresasApi.listar({
       page, page_size: PAGE_SIZE, solo_activas: true, solo_permisionarias: true,
@@ -44,9 +50,18 @@ export default function EmpresasPage() {
         <div className="search-bar" style={{ maxWidth: '360px' }}>
           <Search size={15} className="icon" />
           <input
+            ref={searchRef}
+            autoFocus
             placeholder="Buscar por nombre, catálogo, línea, código o email..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                refetch()
+              }
+            }}
+            aria-label="Buscar empresas"
           />
         </div>
       </div>

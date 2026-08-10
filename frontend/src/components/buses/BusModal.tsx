@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { X, Save } from 'lucide-react'
 import { busesApi } from '../../api'
+import { formatApiError } from '../../api/client'
 
 interface BusModalProps {
   isOpen: boolean
@@ -21,6 +22,7 @@ export default function BusModal({
   tiposCarroceria,
   marcasCarroceria
 }: BusModalProps) {
+  const firstFieldRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
     rua: '',
     numero_chassis: '',
@@ -70,6 +72,37 @@ export default function BusModal({
     setError('')
   }, [busToEdit, isOpen, marcas, tiposCarroceria, marcasCarroceria])
 
+  // Foco en RUA al abrir (alta y edición)
+  useEffect(() => {
+    if (!isOpen) return
+    const focusFirst = () => {
+      const el = firstFieldRef.current
+      if (!el) return
+      el.focus({ preventScroll: true })
+      el.select()
+    }
+    const raf = requestAnimationFrame(focusFirst)
+    const t = window.setTimeout(focusFirst, 120)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.clearTimeout(t)
+    }
+  }, [isOpen, busToEdit?.id_bus])
+
+  // Escape para cerrar (alta y edición)
+  useEffect(() => {
+    if (!isOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !loading) {
+        e.preventDefault()
+        e.stopPropagation()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [isOpen, loading, onClose])
+
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,24 +132,33 @@ export default function BusModal({
       }
       onSuccess()
       onClose()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al guardar la información del vehículo.')
+    } catch (err: unknown) {
+      setError(formatApiError(err, 'Error al guardar la información del vehículo.'))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="modal-overlay" style={{
-      position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)'
-    }}>
+    <div
+      className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-label={busToEdit ? 'Editar Vehículo' : 'Registrar Nuevo Bus'}
+      style={{
+        position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.65)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)'
+      }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget && !loading) onClose()
+      }}
+    >
       <div className="modal-content card" style={{ width: '100%', maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 600, margin: 0 }}>
             {busToEdit ? 'Editar Vehículo' : 'Registrar Nuevo Bus'}
           </h3>
-          <button className="btn-icon btn" onClick={onClose}>
+          <button type="button" className="btn-icon btn" onClick={onClose} disabled={loading} aria-label="Cerrar" tabIndex={-1}>
             <X size={18} />
           </button>
         </div>
@@ -129,11 +171,15 @@ export default function BusModal({
 
         <form onSubmit={handleSubmit} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
           <div>
-            <label className="form-label">RUA / Matrícula *</label>
+            <label className="form-label" htmlFor="bus-rua">RUA / Matrícula *</label>
             <input
+              id="bus-rua"
+              ref={firstFieldRef}
               type="text"
-              className="form-input"
+              className="form-control"
               required
+              autoFocus
+              autoComplete="off"
               value={formData.rua}
               onChange={e => setFormData({ ...formData, rua: e.target.value.toUpperCase() })}
               placeholder="ej. ABC 123"
@@ -141,11 +187,13 @@ export default function BusModal({
           </div>
 
           <div>
-            <label className="form-label">Número de Chasis *</label>
+            <label className="form-label" htmlFor="bus-chasis">Número de Chasis *</label>
             <input
+              id="bus-chasis"
               type="text"
-              className="form-input"
+              className="form-control"
               required
+              autoComplete="off"
               value={formData.numero_chassis}
               onChange={e => setFormData({ ...formData, numero_chassis: e.target.value.toUpperCase() })}
               placeholder="Chasis vin/nro"
@@ -153,10 +201,11 @@ export default function BusModal({
           </div>
 
           <div>
-            <label className="form-label">Año de Fabricación *</label>
+            <label className="form-label" htmlFor="bus-anio">Año de Fabricación *</label>
             <input
+              id="bus-anio"
               type="number"
-              className="form-input"
+              className="form-control"
               required
               value={formData.año}
               onChange={e => setFormData({ ...formData, año: Number(e.target.value) })}
@@ -164,10 +213,11 @@ export default function BusModal({
           </div>
 
           <div>
-            <label className="form-label">Número de Orden</label>
+            <label className="form-label" htmlFor="bus-orden">Número de Orden</label>
             <input
+              id="bus-orden"
               type="number"
-              className="form-input"
+              className="form-control"
               value={formData.numero_orden}
               onChange={e => setFormData({ ...formData, numero_orden: e.target.value })}
               placeholder="N° correlativo"
@@ -175,9 +225,10 @@ export default function BusModal({
           </div>
 
           <div>
-            <label className="form-label">Marca Chasis</label>
+            <label className="form-label" htmlFor="bus-marca">Marca Chasis</label>
             <select
-              className="form-select"
+              id="bus-marca"
+              className="form-control"
               value={formData.id_marca}
               onChange={e => setFormData({ ...formData, id_marca: e.target.value })}
             >
@@ -189,9 +240,10 @@ export default function BusModal({
           </div>
 
           <div>
-            <label className="form-label">Marca Carrocería</label>
+            <label className="form-label" htmlFor="bus-marca-carr">Marca Carrocería</label>
             <select
-              className="form-select"
+              id="bus-marca-carr"
+              className="form-control"
               value={formData.id_marca_carroceria}
               onChange={e => setFormData({ ...formData, id_marca_carroceria: e.target.value })}
             >
@@ -203,9 +255,10 @@ export default function BusModal({
           </div>
 
           <div>
-            <label className="form-label">Tipo Carrocería</label>
+            <label className="form-label" htmlFor="bus-tipo-carr">Tipo Carrocería</label>
             <select
-              className="form-select"
+              id="bus-tipo-carr"
+              className="form-control"
               value={formData.id_tipo_carroceria}
               onChange={e => setFormData({ ...formData, id_tipo_carroceria: e.target.value })}
             >
@@ -217,9 +270,10 @@ export default function BusModal({
           </div>
 
           <div>
-            <label className="form-label">Combustible</label>
+            <label className="form-label" htmlFor="bus-combustible">Combustible</label>
             <select
-              className="form-select"
+              id="bus-combustible"
+              className="form-control"
               value={formData.combustible}
               onChange={e => setFormData({ ...formData, combustible: e.target.value })}
             >
@@ -231,9 +285,10 @@ export default function BusModal({
           </div>
 
           <div>
-            <label className="form-label">Estado Bus</label>
+            <label className="form-label" htmlFor="bus-estado">Estado Bus</label>
             <select
-              className="form-select"
+              id="bus-estado"
+              className="form-control"
               value={formData.estado_bus}
               onChange={e => setFormData({ ...formData, estado_bus: e.target.value })}
             >

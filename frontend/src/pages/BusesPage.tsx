@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { busesApi, empresasApi, itvApi } from '../api'
@@ -42,8 +42,18 @@ export default function BusesPage() {
   const [selectedBusForHistory, setSelectedBusForHistory] = useState<any>(null)
   const [isItvModalOpen, setIsItvModalOpen]               = useState(false)
   const [itvToEdit, setItvToEdit]                         = useState<any>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   const PAGE_SIZE = 25
+
+  const anyModalOpen = isModalOpen || isHistoryOpen || isItvModalOpen
+
+  // Foco en el buscador al entrar y al cerrar modales
+  useEffect(() => {
+    if (anyModalOpen) return
+    const t = window.setTimeout(() => searchRef.current?.focus(), 0)
+    return () => window.clearTimeout(t)
+  }, [anyModalOpen])
 
   // Sincronizar parámetros URL si cambian externamente (Dashboard → lista)
   useEffect(() => {
@@ -156,9 +166,18 @@ export default function BusesPage() {
           <div className="search-bar">
             <Search size={15} className="icon" />
             <input
+              ref={searchRef}
+              autoFocus
               placeholder="Buscar por RUA o Nº Chassis..."
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1) }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  refetch()
+                }
+              }}
+              aria-label="Buscar buses por RUA o chasis"
             />
           </div>
 

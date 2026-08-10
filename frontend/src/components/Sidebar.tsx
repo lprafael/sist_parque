@@ -4,6 +4,7 @@ import {
   Bell, FileBarChart2, LogOut, FileText, Users, History, FileSpreadsheet
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import { useThemeStore } from '../stores/themeStore'
 import { alertasApi } from '../api'
 import { useQuery } from '@tanstack/react-query'
 
@@ -29,6 +30,7 @@ export default function Sidebar({
   onClose?: () => void
 }) {
   const { usuario, logout } = useAuthStore()
+  const theme = useThemeStore((s) => s.theme)
   const navigate = useNavigate()
 
   const { data: alertasData } = useQuery<{ data: { total: number } }>({
@@ -38,6 +40,9 @@ export default function Sidebar({
   })
 
   const criticalCount = alertasData?.data?.total ?? 0
+  const logoSrc = theme === 'light'
+    ? '/img/logo-claro-vmt.png'
+    : '/img/logo-oscuro-vmt.png'
 
   const handleLogout = () => {
     logout()
@@ -52,7 +57,11 @@ export default function Sidebar({
   return (
     <aside className={`sidebar${open ? ' open' : ''}`} aria-hidden={!open}>
       <div className="sidebar-logo">
-        <div className="logo-badge">VMT Paraguay</div>
+        <img
+          src={logoSrc}
+          alt="Viceministerio de Transporte"
+          className="sidebar-logo-img"
+        />
         <div className="logo-title">Sistema de Gestión de<br />Parque Automotor</div>
         <div className="logo-sub">Depto. Registro y Habilitación</div>
       </div>

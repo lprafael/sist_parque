@@ -48,11 +48,25 @@ async def listar_usuarios(
     db: AsyncSession = Depends(get_db),
     user=Depends(require_roles(["ADMIN", "SUPERVISOR"]))
 ):
-    """Listar usuarios del sistema con paginación y filtros desde el esquema sistema."""
+    """Listar solo usuarios habilitados en SIGPA (Parque Automotor, id_sistema=5)."""
+    # Usuarios con habilitación activa en Parque (+ admin, que siempre tiene acceso)
+    parque_ids = (
+        select(UsuarioSistemaRol.usuario_id)
+        .where(
+            UsuarioSistemaRol.sistema_id == SISTEMA_ID_PARQUE,
+            UsuarioSistemaRol.activo == True,
+        )
+    )
+
     q = select(Usuario).options(
         selectinload(Usuario.habilitaciones_sistemas).selectinload(UsuarioSistemaRol.rol)
     )
-    filters = []
+    filters = [
+        or_(
+            Usuario.username == "admin",
+            Usuario.id.in_(parque_ids),
+        )
+    ]
 
     if search:
         filters.append(or_(
@@ -64,24 +78,45 @@ async def listar_usuarios(
         is_active = estado.upper() == "ACTIVO"
         filters.append(Usuario.activo == is_active)
 
-    if filters:
-        q = q.where(*filters)
+    q = q.where(*filters)
+
+    # Filtro por rol en Parque (en SQL, no post-paginación)
+    if rol:
+        rol_norm = normalize_role(rol)
+        rol_aliases = {
+            "ADMIN": ["ADMIN", "Administrador", "admin", "administrador"],
+            "SUPERVISOR": ["SUPERVISOR", "Manager", "manager", "supervisor", "gerente"],
+            "OPERADOR": ["OPERADOR", "User", "user", "operador"],
+            "CONSULTA": ["CONSULTA", "Viewer", "viewer", "consulta"],
+        }
+        aliases = rol_aliases.get(rol_norm, [rol_norm])
+        rol_ids_q = select(Rol.id).where(or_(*[Rol.nombre.ilike(a) for a in aliases]))
+        parque_rol_ids = (
+            select(UsuarioSistemaRol.usuario_id)
+            .where(
+                UsuarioSistemaRol.sistema_id == SISTEMA_ID_PARQUE,
+                UsuarioSistemaRol.activo == True,
+                UsuarioSistemaRol.rol_id.in_(rol_ids_q),
+            )
+        )
+        if rol_norm == "ADMIN":
+            q = q.where(or_(Usuario.username == "admin", Usuario.id.in_(parque_rol_ids)))
+        else:
+            q = q.where(Usuario.id.in_(parque_rol_ids))
 
     # Conteo
-    count_q = select(func.count()).select_from(q.subquery())
+    count_q = select(func.count()).select_from(q.order_by(None).subquery())
     total_res = await db.execute(count_q)
     total = total_res.scalar() or 0
 
     # Paginación
     q = q.order_by(Usuario.id.desc()).offset((page - 1) * page_size).limit(page_size)
     res = await db.execute(q)
-    usuarios = res.scalars().all()
+    usuarios = res.scalars().unique().all()
 
     items = []
     for u in usuarios:
         populate_user_role(u)
-        if rol and u.rol != normalize_role(rol):
-            continue
         items.append(UsuarioOut.model_validate(u))
 
     return {

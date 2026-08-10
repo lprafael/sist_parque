@@ -34,19 +34,26 @@ async def obtener_kpis(
     ))).scalar()
     itv_vencido    = (await db.execute(select(func.count()).select_from(ItvBus).where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento < hoy)))).scalar()
 
-    # Seguros — solo el registro vigente de cada póliza (igual que ITV con es_vigente)
+    # Seguros — solo pólizas con seguro_vigente (el histórico no cuenta).
+    # Un bus puede tener más de un seguro vigente (p.ej. pasajeros + terceros),
+    # por lo que el total puede superar la cantidad de buses.
+    # Se limita a buses ACTIVO del parque actual.
+    seg_base = and_(
+        SeguroBus.seguro_vigente.is_(True),
+        SeguroBus.id_bus.in_(select(Bus.id_bus).where(Bus.estado_bus == "ACTIVO")),
+    )
     seg_vigentes = (await db.execute(select(func.count()).select_from(SeguroBus).where(
-        and_(SeguroBus.seguro_vigente == True, SeguroBus.fecha_vencimiento > en_30)
+        and_(seg_base, SeguroBus.fecha_vencimiento > en_30)
     ))).scalar()
     seg_por_vencer = (await db.execute(select(func.count()).select_from(SeguroBus).where(
         and_(
-            SeguroBus.seguro_vigente == True,
+            seg_base,
             SeguroBus.fecha_vencimiento >= hoy,
             SeguroBus.fecha_vencimiento <= en_30,
         )
     ))).scalar()
     seg_vencidos = (await db.execute(select(func.count()).select_from(SeguroBus).where(
-        and_(SeguroBus.seguro_vigente == True, SeguroBus.fecha_vencimiento < hoy)
+        and_(seg_base, SeguroBus.fecha_vencimiento < hoy)
     ))).scalar()
 
     # Alertas

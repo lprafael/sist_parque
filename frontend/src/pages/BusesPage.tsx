@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { busesApi, empresasApi } from '../api'
+import { busesApi, empresasApi, itvApi } from '../api'
 import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock } from 'lucide-react'
 import BusModal from '../components/buses/BusModal'
 import ItvHistoryModal from '../components/itv/ItvHistoryModal'
@@ -113,8 +113,20 @@ export default function BusesPage() {
     setIsHistoryOpen(true)
   }
 
-  const handleOpenEditItv = (busId: number) => {
-    setItvToEdit({ id_bus: busId })
+  const handleOpenEditItv = async (busId: number) => {
+    try {
+      const res = await itvApi.listar({
+        id_bus: busId,
+        solo_vigentes: true,
+        page: 1,
+        page_size: 1,
+      })
+      const vigente = res.data?.items?.[0]
+      // Con id_itv → editar vigente; sin id_itv → registrar nueva ITV para el bus
+      setItvToEdit(vigente ?? { id_bus: busId })
+    } catch {
+      setItvToEdit({ id_bus: busId })
+    }
     setIsItvModalOpen(true)
   }
 

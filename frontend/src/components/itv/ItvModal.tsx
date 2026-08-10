@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { X, Save } from 'lucide-react'
 import { itvApi } from '../../api'
+import { formatApiError } from '../../api/client'
 
 interface ItvModalProps {
   isOpen: boolean
@@ -9,12 +10,24 @@ interface ItvModalProps {
   itvToEdit?: any
 }
 
+function toDateInput(value?: string | null): string {
+  if (!value) return ''
+  const raw = String(value)
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10)
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toISOString().split('T')[0]
+}
+
 export default function ItvModal({
   isOpen,
   onClose,
   onSuccess,
   itvToEdit
 }: ItvModalProps) {
+  const isEdit = Boolean(itvToEdit?.id_itv)
+  const busLocked = Boolean(itvToEdit?.id_bus)
+
   const [formData, setFormData] = useState({
     id_bus: '',
     fecha_itv: new Date().toISOString().split('T')[0],
@@ -31,8 +44,8 @@ export default function ItvModal({
     if (itvToEdit) {
       setFormData({
         id_bus: itvToEdit.id_bus ? String(itvToEdit.id_bus) : '',
-        fecha_itv: itvToEdit.fecha_itv ? new Date(itvToEdit.fecha_itv).toISOString().split('T')[0] : '',
-        fecha_vencimiento: itvToEdit.fecha_vencimiento ? new Date(itvToEdit.fecha_vencimiento).toISOString().split('T')[0] : '',
+        fecha_itv: toDateInput(itvToEdit.fecha_itv) || new Date().toISOString().split('T')[0],
+        fecha_vencimiento: toDateInput(itvToEdit.fecha_vencimiento) || new Date().toISOString().split('T')[0],
         resultado_itv: itvToEdit.resultado_itv || 'TOTAL',
         centro_itv: itvToEdit.centro_itv || '',
         numero_certificado: itvToEdit.numero_certificado || '',
@@ -64,20 +77,21 @@ export default function ItvModal({
       fecha_itv: formData.fecha_itv,
       fecha_vencimiento: formData.fecha_vencimiento,
       resultado_itv: formData.resultado_itv,
-      centro_itv: formData.centro_itv,
-      numero_certificado: formData.numero_certificado,
-      observaciones: formData.observaciones
+      centro_itv: formData.centro_itv || null,
+      numero_certificado: formData.numero_certificado || null,
+      observaciones: formData.observaciones || null
     }
 
     try {
-      if (itvToEdit) {
-        await itvApi.actualizar(itvToEdit.id_itv, payload)
+      if (isEdit) {
+        const { id_bus: _idBus, ...updatePayload } = payload
+        await itvApi.actualizar(itvToEdit.id_itv, updatePayload)
       } else {
         await itvApi.registrar(payload)
       }
       onSuccess()
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al guardar el registro ITV')
+    } catch (err: unknown) {
+      setError(formatApiError(err, 'Error al guardar el registro ITV'))
     } finally {
       setLoading(false)
     }
@@ -87,7 +101,7 @@ export default function ItvModal({
     <div className="modal-overlay">
       <div className="modal-content" style={{ maxWidth: '500px' }}>
         <div className="modal-header">
-          <h2 className="modal-title">{itvToEdit ? 'Editar ITV' : 'Nuevo Registro ITV'}</h2>
+          <h2 className="modal-title">{isEdit ? 'Editar ITV' : 'Nuevo Registro ITV'}</h2>
           <button className="modal-close" onClick={onClose} disabled={loading}>
             <X size={20} />
           </button>
@@ -105,9 +119,9 @@ export default function ItvModal({
                 required
                 value={formData.id_bus}
                 onChange={e => setFormData(p => ({ ...p, id_bus: e.target.value }))}
-                disabled={!!itvToEdit} // No permitir cambiar de bus al editar
+                disabled={busLocked}
               />
-              {!itvToEdit && <small style={{ color: 'var(--text-muted)' }}>Ingrese el ID numérico del Bus.</small>}
+              {!busLocked && <small style={{ color: 'var(--text-muted)' }}>Ingrese el ID numérico del Bus.</small>}
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>

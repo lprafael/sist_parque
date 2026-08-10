@@ -182,6 +182,13 @@ export default function DashboardPage() {
           to="/seguros?estado=VIGENTE"
         />
         <KpiCard
+          value={kpis?.seguros_vencidos ?? 0}
+          label="Seguros Vencidos"
+          icon="❌"
+          color="red"
+          to="/seguros?estado=VENCIDO"
+        />
+        <KpiCard
           value={kpis?.alertas_pendientes ?? 0}
           label="Alertas Pendientes"
           icon="🔔"
@@ -386,11 +393,16 @@ export default function DashboardPage() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '8px' }}>
             {[
-              { label: 'Vigentes',    value: kpis?.seguros_vigentes ?? 0,   color: '#00c853', icon: '✅' },
-              { label: 'Por Vencer',  value: kpis?.seguros_por_vencer ?? 0, color: '#ffab00', icon: '⚠️' },
-              { label: 'Vencidos',    value: kpis?.seguros_vencidos ?? 0,   color: '#f44336', icon: '❌' },
+              {
+                label: 'Vigentes',
+                value: Math.max(0, (kpis?.seguros_vigentes ?? 0) - (kpis?.seguros_por_vencer ?? 0)),
+                color: '#00c853',
+                icon: '✅',
+              },
+              { label: 'Por Vencer', value: kpis?.seguros_por_vencer ?? 0, color: '#ffab00', icon: '⚠️' },
+              { label: 'Vencidos',   value: kpis?.seguros_vencidos ?? 0,   color: '#f44336', icon: '❌' },
             ].map(({ label, value, color, icon }) => {
-              const total = (kpis?.seguros_vigentes ?? 0) + (kpis?.seguros_por_vencer ?? 0) + (kpis?.seguros_vencidos ?? 0)
+              const total = (kpis?.seguros_vigentes ?? 0) + (kpis?.seguros_vencidos ?? 0)
               const pct = total ? Math.round((value / total) * 100) : 0
               return (
                 <div key={label}>

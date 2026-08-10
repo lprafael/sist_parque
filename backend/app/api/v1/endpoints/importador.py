@@ -36,7 +36,7 @@ async def preview_excel(
     _user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
 ):
     """
-    Analiza la hoja General y cruza RUA/chasis con la base
+    Analiza las hojas General y BAJAS y cruza RUA/chasis con la base
     sin modificar datos.
     """
     contents = await _read_xlsx(file)
@@ -71,11 +71,23 @@ async def preview_excel(
         "muestra_solo_db": preview.muestra_solo_db,
         "muestra_itv_diff": preview.muestra_itv_diff,
         "errores_parseo": preview.errores_parseo,
+        "hoja_bajas": preview.hoja_bajas,
+        "total_bajas_excel": preview.total_bajas_excel,
+        "bajas_a_aplicar": preview.bajas_a_aplicar,
+        "bajas_ya_en_db": preview.bajas_ya_en_db,
+        "bajas_sin_match_db": preview.bajas_sin_match_db,
+        "muestra_bajas": preview.muestra_bajas,
         "mensaje": (
             f"Planilla '{preview.hoja}' con {preview.total_excel} buses. "
             f"{preview.matched_rua + preview.matched_chassis} coinciden con la DB; "
             f"{preview.solo_excel} solo en Excel; "
-            f"{preview.itv_actualizar} ITV a actualizar."
+            f"{preview.itv_actualizar} ITV a actualizar"
+            + (
+                f"; hoja BAJAS: {preview.bajas_a_aplicar} a dar de baja"
+                if preview.hoja_bajas
+                else ""
+            )
+            + "."
         ),
     }
 
@@ -89,8 +101,8 @@ async def aplicar_excel(
     user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
 ):
     """
-    Aplica la planilla: upsert buses/ITV/seguros, refresca auxiliar
-    y opcionalmente alinea ACTIVO/INACTIVO con el Excel.
+    Aplica la planilla: upsert buses/ITV/seguros, aplica BAJAS,
+    refresca auxiliar y opcionalmente alinea ACTIVO/INACTIVO con General.
     """
     contents = await _read_xlsx(file)
     sync_estado = str(sincronizar_estado).strip().lower() in ("1", "true", "yes", "si", "sí")
@@ -120,6 +132,7 @@ async def aplicar_excel(
         "buses_actualizados": result.buses_actualizados,
         "buses_activados": result.buses_activados,
         "buses_inactivados": result.buses_inactivados,
+        "buses_baja": result.buses_baja,
         "itv_insertados": result.itv_insertados,
         "itv_sin_cambio": result.itv_sin_cambio,
         "seguros_insertados": result.seguros_insertados,
@@ -128,7 +141,9 @@ async def aplicar_excel(
         "mensaje": (
             f"Importación aplicada: {result.buses_actualizados} buses actualizados, "
             f"{result.buses_creados} creados, {result.itv_insertados} ITV nuevas, "
-            f"{result.seguros_insertados} seguros."
+            f"{result.seguros_insertados} seguros"
+            + (f", {result.buses_baja} dados de baja" if result.buses_baja else "")
+            + "."
         ),
     }
 
@@ -141,8 +156,8 @@ async def sincronizar_estado_excel(
     _user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
 ):
     """
-    Recuperación: solo alinea ACTIVO/INACTIVO según RUA/chasis del Excel.
-    No toca ITV ni seguros.
+    Recuperación: alinea ACTIVO/INACTIVO/BAJA según hojas General y BAJAS.
+    No toca ITV ni seguros salvo invalidar ITV al dar de baja.
     """
     contents = await _read_xlsx(file)
     inactivar = str(inactivar_fuera).strip().lower() in ("1", "true", "yes", "si", "sí")
@@ -164,9 +179,11 @@ async def sincronizar_estado_excel(
         "filename": file.filename,
         "buses_activados": result.buses_activados,
         "buses_inactivados": result.buses_inactivados,
+        "buses_baja": result.buses_baja,
         "mensaje": (
             f"Estados alineados: {result.buses_activados} activados, "
-            f"{result.buses_inactivados} inactivados."
+            f"{result.buses_inactivados} inactivados, "
+            f"{result.buses_baja} dados de baja."
         ),
     }
 

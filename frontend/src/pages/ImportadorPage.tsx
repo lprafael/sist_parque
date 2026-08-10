@@ -23,6 +23,12 @@ type PreviewData = {
   muestra_solo_excel: Array<Record<string, unknown>>
   muestra_solo_db: Array<Record<string, unknown>>
   muestra_itv_diff: Array<Record<string, unknown>>
+  hoja_bajas?: string | null
+  total_bajas_excel?: number
+  bajas_a_aplicar?: number
+  bajas_ya_en_db?: number
+  bajas_sin_match_db?: number
+  muestra_bajas?: Array<Record<string, unknown>>
   mensaje: string
 }
 
@@ -33,6 +39,7 @@ type ApplyData = {
   buses_actualizados: number
   buses_activados: number
   buses_inactivados: number
+  buses_baja?: number
   itv_insertados: number
   itv_sin_cambio: number
   seguros_insertados: number
@@ -157,10 +164,14 @@ export default function ImportadorPage() {
     const ok = window.confirm(
       '¿Aplicar la importación a la base de datos?\n\n' +
         `Se actualizarán hasta ${preview.itv_actualizar} ITV, ` +
-        `${preview.solo_excel} buses nuevos potenciales, y ` +
+        `${preview.solo_excel} buses nuevos potenciales` +
+        (preview.bajas_a_aplicar
+          ? `, ${preview.bajas_a_aplicar} buses de la hoja BAJAS pasarían a BAJA`
+          : '') +
+        ', y ' +
         (sincronizarEstado
-          ? `${preview.solo_db_activos} activos fuera del Excel pasarían a INACTIVO.`
-          : 'no se cambiará el estado ACTIVO/INACTIVO de buses fuera del Excel.'),
+          ? `${preview.solo_db_activos} activos fuera de General pasarían a INACTIVO (salvo los de BAJAS).`
+          : 'no se cambiará ACTIVO/INACTIVO de buses fuera de General (sí se aplican BAJAS).'),
     )
     if (!ok) return
 
@@ -184,8 +195,8 @@ export default function ImportadorPage() {
   const handleSoloEstado = async () => {
     if (!file) return
     const ok = window.confirm(
-      '¿Solo sincronizar ACTIVO/INACTIVO según el Excel?\n\n' +
-        'No modifica ITV ni seguros. Útil para recuperar buses mal inactivados.',
+      '¿Solo sincronizar ACTIVO/INACTIVO/BAJA según General y BAJAS?\n\n' +
+        'No modifica seguros. Al dar de baja, cierra asignación e invalida ITV vigente.',
     )
     if (!ok) return
     setApplying(true)
@@ -222,8 +233,8 @@ export default function ImportadorPage() {
         <div>
           <h1 className="page-header-title">Importador Masivo (Excel)</h1>
           <p className="page-header-sub">
-            Cruza la planilla ITV (hoja General) con registro_habilitacion y aplica
-            buses, ITV y seguros
+            Cruza la planilla ITV (hojas General y BAJAS) con registro_habilitacion y aplica
+            buses, ITV, seguros y bajas
           </p>
         </div>
       </div>
@@ -235,8 +246,8 @@ export default function ImportadorPage() {
             Planilla ITV / Parque Automotor
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-            Usá un .xlsx con hoja <strong>General</strong> (ej. ITV - 2026 Base de Datos…).
-            Primero se analiza el cruce; después confirmás la aplicación.
+            Usá un .xlsx con hoja <strong>General</strong> y, si existe, <strong>BAJAS</strong>
+            {' '}(ej. ITV - 2026 Base de Datos…). Primero se analiza el cruce; después confirmás la aplicación.
           </p>
 
           <input
@@ -394,6 +405,7 @@ export default function ImportadorPage() {
               {preview.fecha_corte && (
                 <div style={{ fontSize: '0.85rem', marginTop: 4 }}>
                   Fecha corte planilla: {preview.fecha_corte} · Hoja: {preview.hoja}
+                  {preview.hoja_bajas ? ` · ${preview.hoja_bajas}` : ''}
                 </div>
               )}
             </div>
@@ -414,6 +426,13 @@ export default function ImportadorPage() {
               <Stat label="ITV a actualizar" value={preview.itv_actualizar} />
               <Stat label="ITV igual" value={preview.itv_igual} />
               <Stat label="Sin fecha ITV" value={preview.itv_sin_fecha} />
+              {preview.hoja_bajas && (
+                <>
+                  <Stat label="BAJAS en Excel" value={preview.total_bajas_excel || 0} />
+                  <Stat label="A dar de baja" value={preview.bajas_a_aplicar || 0} tone="warn" />
+                  <Stat label="Ya en BAJA" value={preview.bajas_ya_en_db || 0} />
+                </>
+              )}
             </div>
 
             {Object.keys(preview.tipos_servicio || {}).length > 0 && (
@@ -440,6 +459,13 @@ export default function ImportadorPage() {
               rows={preview.muestra_itv_diff}
               cols={['rua', 'itv_db', 'itv_excel', 'match']}
             />
+            {preview.hoja_bajas && (
+              <SampleTable
+                title="Muestra a dar de baja (hoja BAJAS, no en General)"
+                rows={preview.muestra_bajas || []}
+                cols={['id_bus', 'rua', 'chassis', 'estado_actual']}
+              />
+            )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', margin: '1.25rem 0' }}>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.9rem' }}>
@@ -448,7 +474,7 @@ export default function ImportadorPage() {
                   checked={sincronizarEstado}
                   onChange={(e) => setSincronizarEstado(e.target.checked)}
                 />
-                Sincronizar estado ACTIVO/INACTIVO con la planilla
+                Sincronizar ACTIVO/INACTIVO con General (BAJAS se aplican siempre)
               </label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.9rem' }}>
                 <input
@@ -476,11 +502,12 @@ export default function ImportadorPage() {
                 disabled={applying || loading || !file}
                 style={{ width: '100%' }}
               >
-                <span>Solo recuperar ACTIVO/INACTIVO (sin tocar ITV)</span>
+                <span>Solo recuperar ACTIVO / INACTIVO / BAJA</span>
               </button>
             </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.75rem' }}>
               Si una importación anterior inactivó de más, usá el botón de recuperación con el mismo Excel.
+              La hoja BAJAS se aplica al confirmar (estado BAJA, cierra asignación e invalida ITV).
             </p>
           </div>
         )}
@@ -505,6 +532,7 @@ export default function ImportadorPage() {
                   <li>Creados: {applyResult.buses_creados}</li>
                   <li>Activados: {applyResult.buses_activados}</li>
                   <li>Inactivados: {applyResult.buses_inactivados}</li>
+                  <li>Dados de baja: {applyResult.buses_baja ?? 0}</li>
                   <li>ITV nuevas: {applyResult.itv_insertados} (sin cambio: {applyResult.itv_sin_cambio})</li>
                   <li>Seguros: {applyResult.seguros_insertados}</li>
                   <li>Staging auxiliar: {applyResult.auxiliar_filas}</li>

@@ -34,12 +34,20 @@ async def obtener_kpis(
     ))).scalar()
     itv_vencido    = (await db.execute(select(func.count()).select_from(ItvBus).where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento < hoy)))).scalar()
 
-    # Seguros
-    seg_vigentes   = (await db.execute(select(func.count()).select_from(SeguroBus).where(SeguroBus.fecha_vencimiento > en_30))).scalar()
-    seg_por_vencer = (await db.execute(select(func.count()).select_from(SeguroBus).where(
-        and_(SeguroBus.fecha_vencimiento >= hoy, SeguroBus.fecha_vencimiento <= en_30)
+    # Seguros — solo el registro vigente de cada póliza (igual que ITV con es_vigente)
+    seg_vigentes = (await db.execute(select(func.count()).select_from(SeguroBus).where(
+        and_(SeguroBus.seguro_vigente == True, SeguroBus.fecha_vencimiento > en_30)
     ))).scalar()
-    seg_vencidos   = (await db.execute(select(func.count()).select_from(SeguroBus).where(SeguroBus.fecha_vencimiento < hoy))).scalar()
+    seg_por_vencer = (await db.execute(select(func.count()).select_from(SeguroBus).where(
+        and_(
+            SeguroBus.seguro_vigente == True,
+            SeguroBus.fecha_vencimiento >= hoy,
+            SeguroBus.fecha_vencimiento <= en_30,
+        )
+    ))).scalar()
+    seg_vencidos = (await db.execute(select(func.count()).select_from(SeguroBus).where(
+        and_(SeguroBus.seguro_vigente == True, SeguroBus.fecha_vencimiento < hoy)
+    ))).scalar()
 
     # Alertas
     alertas_criticas   = (await db.execute(select(func.count()).select_from(Alerta).where(

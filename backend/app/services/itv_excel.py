@@ -1,4 +1,4 @@
-"""Parser y sincronización de la planilla ITV (hoja General)."""
+"""Parser y sincronización de la planilla ITV (hojas General y BAJAS)."""
 from __future__ import annotations
 
 import asyncio
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Bus,
+    BusEmpresa,
     ItvBus,
     Marca,
     MarcaCarroceria,
@@ -166,6 +167,13 @@ class ExcelBusRow:
 
 
 @dataclass
+class BajaKey:
+    row_num: int
+    rua: Optional[str] = None
+    chassis: Optional[str] = None
+
+
+@dataclass
 class PreviewResult:
     hoja: str
     fecha_corte: Optional[str]
@@ -184,6 +192,12 @@ class PreviewResult:
     muestra_solo_db: list[dict] = field(default_factory=list)
     muestra_itv_diff: list[dict] = field(default_factory=list)
     errores_parseo: list[str] = field(default_factory=list)
+    hoja_bajas: Optional[str] = None
+    total_bajas_excel: int = 0
+    bajas_a_aplicar: int = 0
+    bajas_ya_en_db: int = 0
+    bajas_sin_match_db: int = 0
+    muestra_bajas: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -192,6 +206,7 @@ class ApplyResult:
     buses_actualizados: int = 0
     buses_activados: int = 0
     buses_inactivados: int = 0
+    buses_baja: int = 0
     itv_insertados: int = 0
     itv_sin_cambio: int = 0
     seguros_insertados: int = 0
@@ -303,13 +318,128 @@ def parse_general_sheet(file_bytes: bytes) -> tuple[str, Optional[str], list[Exc
     return sheet_name, fecha_corte, rows, errors
 
 
+def _resolve_bajas_sheet_name(sheetnames: list[str]) -> Optional[str]:
+    for name in sheetnames:
+        if name.strip().upper() == "BAJAS":
+            return name
+    return None
+
+
+def parse_bajas_sheet(file_bytes: bytes) -> tuple[Optional[str], list[BajaKey], list[str]]:
+    """Lee RUA/chasis de la hoja BAJAS. Si no existe, devuelve (None, [], [])."""
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
+    sheet_name = _resolve_bajas_sheet_name(wb.sheetnames)
+    if not sheet_name:
+        wb.close()
+        return None, [], []
+
+    ws = wb[sheet_name]
+    errors: list[str] = []
+    try:
+        header_row, colmap = _find_header_row(ws)
+    except ValueError as exc:
+        wb.close()
+        return sheet_name, [], [str(exc)]
+
+    def cell(row_tuple, key: str):
+        idx = colmap.get(key)
+        if idx is None or idx >= len(row_tuple):
+            return None
+        return row_tuple[idx]
+
+    rows: list[BajaKey] = []
+    seen: set[tuple[str, str]] = set()
+    for r_idx, row in enumerate(ws.iter_rows(min_row=header_row + 1, values_only=True), start=header_row + 1):
+        if not any(c is not None and str(c).strip() != "" for c in row):
+            continue
+        rua = clean_str(cell(row, "rua"), upper=True)
+        chassis = clean_str(cell(row, "chassis"), upper=True)
+        if not rua and not chassis:
+            continue
+        if rua and rua.startswith("#"):
+            continue
+        key = (rua or "", chassis or "")
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(BajaKey(row_num=r_idx, rua=rua, chassis=chassis))
+
+    wb.close()
+    return sheet_name, rows, errors
+
+
+def _keys_from_bajas(rows: list[BajaKey]) -> tuple[set[str], set[str]]:
+    return {r.rua for r in rows if r.rua}, {r.chassis for r in rows if r.chassis}
+
+
+async def _aplicar_bajas_vs_general(
+    db: AsyncSession,
+    buses: list[Bus],
+    *,
+    general_ruas: set[str],
+    general_chassis: set[str],
+    bajas_ruas: set[str],
+    bajas_chassis: set[str],
+    result: ApplyResult,
+) -> set[int]:
+    """
+    Buses en hoja BAJAS y ausentes en General → estado BAJA,
+    cierra asignación vigente e invalida ITV vigente.
+    General tiene prioridad (no se dan de baja).
+    """
+    if not bajas_ruas and not bajas_chassis:
+        return set()
+
+    candidatos: list[Bus] = []
+    for b in buses:
+        if _bus_in_excel(b, general_ruas, general_chassis):
+            continue
+        if not _bus_in_excel(b, bajas_ruas, bajas_chassis):
+            continue
+        if (b.estado_bus or "").upper() == "BAJA":
+            continue
+        candidatos.append(b)
+
+    if not candidatos:
+        return set()
+
+    id_set = {b.id_bus for b in candidatos}
+    hoy = date.today()
+    for b in candidatos:
+        b.estado_bus = "BAJA"
+        result.buses_baja += 1
+
+    asig_res = await db.execute(
+        select(BusEmpresa).where(
+            BusEmpresa.id_bus.in_(id_set),
+            BusEmpresa.fecha_fin_asignacion.is_(None),
+        )
+    )
+    for asig in asig_res.scalars().all():
+        asig.fecha_fin_asignacion = hoy
+        asig.estado_asignacion = "CERRADA"
+        if not asig.motivo:
+            asig.motivo = "BAJA"
+
+    itv_res = await db.execute(
+        select(ItvBus).where(ItvBus.id_bus.in_(id_set), ItvBus.es_vigente.is_(True))
+    )
+    for itv in itv_res.scalars().all():
+        itv.es_vigente = False
+
+    return id_set
+
+
 async def build_preview(db: AsyncSession, file_bytes: bytes) -> PreviewResult:
     hoja, fecha_corte, rows, errors = await asyncio.to_thread(parse_general_sheet, file_bytes)
+    hoja_bajas, bajas_rows, bajas_errors = await asyncio.to_thread(parse_bajas_sheet, file_bytes)
     preview = PreviewResult(
         hoja=hoja,
         fecha_corte=fecha_corte,
         total_excel=len(rows),
-        errores_parseo=errors,
+        errores_parseo=errors + bajas_errors,
+        hoja_bajas=hoja_bajas,
+        total_bajas_excel=len(bajas_rows),
     )
 
     for r in rows:
@@ -389,12 +519,45 @@ async def build_preview(db: AsyncSession, file_bytes: bytes) -> PreviewResult:
     preview.solo_db_activos = len(solo_db)
 
     id_to_meta = {
-        id_bus: (rua, chassis)
-        for id_bus, rua, chassis, _ in db_buses
+        id_bus: (rua, chassis, estado)
+        for id_bus, rua, chassis, estado in db_buses
     }
     for id_bus in list(solo_db)[:15]:
-        rua, chassis = id_to_meta.get(id_bus, (None, None))
+        rua, chassis, _ = id_to_meta.get(id_bus, (None, None, None))
         preview.muestra_solo_db.append({"id_bus": id_bus, "rua": rua, "chassis": chassis})
+
+    # Cruce con hoja BAJAS: prioridad General; solo aplicar si está en BAJAS y no en General
+    if bajas_rows:
+        bajas_ruas, bajas_chassis = _keys_from_bajas(bajas_rows)
+        general_ruas = {r.rua for r in rows if r.rua}
+        general_chassis = {r.chassis for r in rows if r.chassis}
+        matched_baja_ids: set[int] = set()
+        for r in bajas_rows:
+            if (r.rua and r.rua in general_ruas) or (r.chassis and r.chassis in general_chassis):
+                continue
+            id_bus = None
+            if r.rua and r.rua in rua_map:
+                id_bus = rua_map[r.rua]
+            elif r.chassis and r.chassis in chassis_map:
+                id_bus = chassis_map[r.chassis]
+            if not id_bus:
+                preview.bajas_sin_match_db += 1
+                continue
+            if id_bus in matched_baja_ids:
+                continue
+            matched_baja_ids.add(id_bus)
+            _, _, estado = id_to_meta.get(id_bus, (None, None, None))
+            if (estado or "").upper() == "BAJA":
+                preview.bajas_ya_en_db += 1
+            else:
+                preview.bajas_a_aplicar += 1
+                if len(preview.muestra_bajas) < 15:
+                    preview.muestra_bajas.append({
+                        "id_bus": id_bus,
+                        "rua": r.rua,
+                        "chassis": r.chassis,
+                        "estado_actual": estado,
+                    })
 
     return preview
 
@@ -529,19 +692,36 @@ async def sincronizar_estado_desde_excel(
     *,
     inactivar_fuera: bool = True,
 ) -> ApplyResult:
-    """Solo alinea ACTIVO/INACTIVO según RUA/chasis del Excel (recuperación segura)."""
+    """Alinea ACTIVO/INACTIVO/BAJA según hojas General y BAJAS."""
     _, _, rows, _ = await asyncio.to_thread(parse_general_sheet, file_bytes)
+    _, bajas_rows, _ = await asyncio.to_thread(parse_bajas_sheet, file_bytes)
     result = ApplyResult()
     excel_ruas = {r.rua for r in rows if r.rua}
     excel_chassis = {r.chassis for r in rows if r.chassis}
+    bajas_ruas, bajas_chassis = _keys_from_bajas(bajas_rows)
 
     bus_res = await db.execute(select(Bus))
     buses = list(bus_res.scalars().all())
+
+    # Primero BAJAS (excepto los que siguen en General)
+    await _aplicar_bajas_vs_general(
+        db,
+        buses,
+        general_ruas=excel_ruas,
+        general_chassis=excel_chassis,
+        bajas_ruas=bajas_ruas,
+        bajas_chassis=bajas_chassis,
+        result=result,
+    )
+
     for b in buses:
         if _bus_in_excel(b, excel_ruas, excel_chassis):
             if (b.estado_bus or "").upper() != "ACTIVO":
                 b.estado_bus = "ACTIVO"
                 result.buses_activados += 1
+        elif _bus_in_excel(b, bajas_ruas, bajas_chassis):
+            # Ya tratado arriba como BAJA
+            continue
         elif inactivar_fuera and (b.estado_bus or "").upper() == "ACTIVO":
             b.estado_bus = "INACTIVO"
             result.buses_inactivados += 1
@@ -559,11 +739,13 @@ async def apply_import(
     usuario: Optional[str] = None,
 ) -> ApplyResult:
     hoja, fecha_corte, rows, _ = await asyncio.to_thread(parse_general_sheet, file_bytes)
+    _, bajas_rows, _ = await asyncio.to_thread(parse_bajas_sheet, file_bytes)
     result = ApplyResult()
     today = date.today()
 
     excel_ruas = {r.rua for r in rows if r.rua}
     excel_chassis = {r.chassis for r in rows if r.chassis}
+    bajas_ruas, bajas_chassis = _keys_from_bajas(bajas_rows)
 
     bus_res = await db.execute(select(Bus))
     buses = list(bus_res.scalars().all())
@@ -759,13 +941,26 @@ async def apply_import(
     bus_res = await db.execute(select(Bus))
     buses = list(bus_res.scalars().all())
 
-    # ACTIVO/INACTIVO según presencia en Excel (no según filas OK)
+    # ACTIVO / BAJA / INACTIVO según General + BAJAS
+    # BAJAS siempre se aplica (documento de bajas); INACTIVO solo si sincronizar_estado
+    await _aplicar_bajas_vs_general(
+        db,
+        buses,
+        general_ruas=excel_ruas,
+        general_chassis=excel_chassis,
+        bajas_ruas=bajas_ruas,
+        bajas_chassis=bajas_chassis,
+        result=result,
+    )
+
     if sincronizar_estado:
         for b in buses:
             if _bus_in_excel(b, excel_ruas, excel_chassis):
                 if (b.estado_bus or "").upper() != "ACTIVO":
                     b.estado_bus = "ACTIVO"
                     result.buses_activados += 1
+            elif _bus_in_excel(b, bajas_ruas, bajas_chassis):
+                continue
             elif (b.estado_bus or "").upper() == "ACTIVO":
                 b.estado_bus = "INACTIVO"
                 result.buses_inactivados += 1

@@ -1,6 +1,11 @@
-"""Lee las planillas oficiales PLANILLA DE BAJA DE BUSES {año}.xlsx."""
+"""Lee las planillas oficiales PLANILLA DE BAJA DE BUSES {año}.xlsx.
+
+Fuente embebida: app/data/bajas_oficiales.json (viaja con el backend).
+Si existe el Excel en BAJA DE BUSES/, se usa ese y pisa el JSON.
+"""
 from __future__ import annotations
 
+import json
 import os
 import re
 from datetime import date, datetime
@@ -10,6 +15,8 @@ from typing import Any, Optional
 import openpyxl
 
 _CACHE: dict[tuple[str, float], list[dict[str, Any]]] = {}
+_JSON_CACHE: Optional[dict[str, list[dict[str, Any]]]] = None
+_JSON_PATH = Path(__file__).resolve().parents[1] / "data" / "bajas_oficiales.json"
 
 
 def _norm(v: Any) -> str:
@@ -36,20 +43,51 @@ def _as_date(v: Any) -> Optional[date]:
     return None
 
 
+def _json_embebido() -> dict[str, list[dict[str, Any]]]:
+    global _JSON_CACHE
+    if _JSON_CACHE is not None:
+        return _JSON_CACHE
+    if not _JSON_PATH.is_file():
+        _JSON_CACHE = {}
+        return _JSON_CACHE
+    raw = json.loads(_JSON_PATH.read_text(encoding="utf-8"))
+    out: dict[str, list[dict[str, Any]]] = {}
+    for key, rows in (raw or {}).items():
+        parsed = []
+        for item in rows:
+            rec = dict(item)
+            fec = rec.get("fecha_baja")
+            if isinstance(fec, str) and fec:
+                try:
+                    rec["fecha_baja"] = date.fromisoformat(fec[:10])
+                except ValueError:
+                    rec["fecha_baja"] = None
+            parsed.append(rec)
+        out[str(key)] = parsed
+    _JSON_CACHE = out
+    return _JSON_CACHE
+
+
 def dir_planillas() -> Path:
     env = (os.getenv("BAJAS_PLANILLAS_DIR") or "").strip()
     if env and Path(env).is_dir():
         return Path(env)
     here = Path(__file__).resolve()
+    cwd = Path.cwd()
     for cand in (
         here.parents[3] / "BAJA DE BUSES",
         here.parents[2] / "BAJA DE BUSES",
-        Path.cwd() / "BAJA DE BUSES",
+        here.parents[1] / "BAJA DE BUSES",
+        cwd / "BAJA DE BUSES",
+        cwd.parent / "BAJA DE BUSES",
         Path("/app/BAJA DE BUSES"),
     ):
-        if cand.is_dir():
-            return cand
-    return here.parents[3] / "BAJA DE BUSES"
+        try:
+            if cand.is_dir():
+                return cand
+        except (OSError, IndexError):
+            continue
+    return here.parents[2] / "BAJA DE BUSES"
 
 
 def path_planilla(anio: int) -> Optional[Path]:
@@ -62,17 +100,21 @@ def path_planilla(anio: int) -> Optional[Path]:
 
 
 def anios_con_planilla() -> list[int]:
-    folder = dir_planillas()
-    if not folder.is_dir():
-        return []
-    found: list[int] = []
-    for p in folder.glob("PLANILLA DE BAJA DE BUSES *.xlsx"):
-        if p.name.startswith("~$"):
+    found: set[int] = set()
+    for key in _json_embebido():
+        try:
+            found.add(int(key))
+        except ValueError:
             continue
-        m = re.search(r"(20\d{2})", p.stem)
-        if m:
-            found.append(int(m.group(1)))
-    return sorted(set(found))
+    folder = dir_planillas()
+    if folder.is_dir():
+        for p in folder.glob("PLANILLA DE BAJA DE BUSES *.xlsx"):
+            if p.name.startswith("~$"):
+                continue
+            m = re.search(r"(20\d{2})", p.stem)
+            if m:
+                found.add(int(m.group(1)))
+    return sorted(found)
 
 
 def _col(header, *needles: str) -> Optional[int]:
@@ -88,7 +130,7 @@ def _col(header, *needles: str) -> Optional[int]:
 def leer_planilla(anio: int) -> list[dict[str, Any]]:
     path = path_planilla(anio)
     if not path:
-        return []
+        return list(_json_embebido().get(str(anio), []))
     mtime = path.stat().st_mtime
     cache_key = (str(path), mtime)
     if cache_key in _CACHE:

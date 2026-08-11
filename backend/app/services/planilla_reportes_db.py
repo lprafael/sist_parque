@@ -539,9 +539,9 @@ async def reporte_bajas(db: AsyncSession, anio: Optional[int] = None) -> dict:
         titulo = f"UNIDADES DADAS DE BAJA EN EL AÑO {anio}"
         nota = (
             f"Planilla oficial {anio} · {len(rows_src)} unidades · "
-            f"mismo criterio que PLANILLA DE BAJA DE BUSES {anio}.xlsx"
+            f"UNIDADES DADAS DE BAJA EN EL AÑO {anio}"
         )
-        fuente = f"BAJA DE BUSES/PLANILLA DE BAJA DE BUSES {anio}.xlsx"
+        fuente = f"planilla oficial {anio}"
     elif fuente_todos_doc:
         db_map = await _mapa_buses_por_chasis(db)
         rows_src = []

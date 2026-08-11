@@ -398,6 +398,7 @@ async def planilla_pestanas(_=Depends(get_current_user)):
 @router.get("/planilla/reporte/{key}")
 async def planilla_reporte_db(
     key: str,
+    anio: Optional[int] = Query(None, ge=2000, le=2100),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
@@ -407,7 +408,7 @@ async def planilla_reporte_db(
     """
     from app.services.planilla_reportes_db import obtener_reporte
     try:
-        return await obtener_reporte(db, key)
+        return await obtener_reporte(db, key, anio=anio)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
@@ -432,6 +433,7 @@ def _safe_filename(name: str) -> str:
 @router.get("/planilla/reporte/{key}/excel")
 async def planilla_reporte_excel(
     key: str,
+    anio: Optional[int] = Query(None, ge=2000, le=2100),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user),
 ):
@@ -439,7 +441,7 @@ async def planilla_reporte_excel(
     from app.services.planilla_reportes_db import obtener_reporte
 
     try:
-        data = await obtener_reporte(db, key)
+        data = await obtener_reporte(db, key, anio=anio)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
@@ -577,7 +579,11 @@ async def planilla_reporte_excel(
 
     fname = _safe_filename(str(data.get("hoja") or key))
     fecha = data.get("fecha") or date.today().isoformat()
-    filename = f"Planilla_ITV_{fname}_{fecha}.xlsx"
+    anio_rep = data.get("anio")
+    if key == "bajas" and anio_rep:
+        filename = f"PLANILLA_DE_BAJA_DE_BUSES_{anio_rep}.xlsx"
+    else:
+        filename = f"Planilla_ITV_{fname}_{fecha}.xlsx"
 
     return StreamingResponse(
         stream,

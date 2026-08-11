@@ -18,7 +18,7 @@ HOY = date.today
 # Catálogo de pestañas (como en el Excel ITV)
 PESTANAS = [
     {"key": "cuadro_edad", "label": "CUADRO DE EDAD", "titulo": "Cuadro de edades del parque operativo"},
-    {"key": "bajas", "label": "BAJAS", "titulo": "Parque automotor dado de baja"},
+    {"key": "bajas", "label": "BAJAS", "titulo": "Unidades dadas de baja en el año"},
     {"key": "oper_reser_declar", "label": "BUSES OPER RESER Y DECLAR", "titulo": "Buses operativos, reserva y declarados"},
     {"key": "porcentaje_inclusivo", "label": "PORCENTAJE INCLUSIVO", "titulo": "Porcentaje de buses por tipo de servicio"},
     {"key": "graficos", "label": "GRAFICOS", "titulo": "Resumen global parque e ITV"},
@@ -433,62 +433,172 @@ async def reporte_cuadro_edad(db: AsyncSession) -> dict:
     }
 
 
-async def reporte_bajas(db: AsyncSession) -> dict:
-    """Buses con estado INACTIVO — listado estilo planilla de bajas."""
-    itv_map = await _itv_vigente_map(db)
+def _norm_chasis(v: Any) -> str:
+    if v is None:
+        return ""
+    return re.sub(r"[^A-Z0-9]", "", str(v).strip().upper())
 
+
+async def _mapa_buses_por_chasis(db: AsyncSession) -> dict[str, Bus]:
+    q = select(Bus).options(selectinload(Bus.marca))
+    out: dict[str, Bus] = {}
+    for bus in (await db.execute(q)).scalars().all():
+        key = _norm_chasis(bus.numero_chassis)
+        if key:
+            out[key] = bus
+    return out
+
+
+async def _bajas_desde_db(db: AsyncSession, anio: Optional[int]) -> list[dict[str, Any]]:
+    """Bajas del sistema (estado BAJA) con fecha de cierre de asignación."""
     q = (
         select(Bus)
-        .where(Bus.estado_bus == "INACTIVO")
-        .options(
-            selectinload(Bus.marca),
-            selectinload(Bus.tipo_carroceria),
-            selectinload(Bus.marca_carroceria),
-        )
+        .where(Bus.estado_bus == "BAJA")
+        .options(selectinload(Bus.marca))
         .order_by(Bus.numero_orden.nullslast(), Bus.id_bus)
     )
     buses = list((await db.execute(q)).scalars().all())
+    if not buses:
+        return []
 
-    # Última asignación (cualquier motivo) para mostrar empresa
-    emp_map: dict[int, str] = {}
-    if buses:
-        ids = [b.id_bus for b in buses]
-        asig_q = await db.execute(
-            select(BusEmpresa, Eot)
-            .outerjoin(Eot, Eot.id_eot_vmt_hex == BusEmpresa.id_eot)
-            .where(BusEmpresa.id_bus.in_(ids))
-            .order_by(BusEmpresa.fecha_asignacion.desc())
+    ids = [b.id_bus for b in buses]
+    asig_q = await db.execute(
+        select(BusEmpresa, Eot)
+        .outerjoin(Eot, Eot.id_eot_vmt_hex == BusEmpresa.id_eot)
+        .where(
+            BusEmpresa.id_bus.in_(ids),
+            BusEmpresa.fecha_fin_asignacion.is_not(None),
         )
-        for asig, eot in asig_q.all():
-            if asig.id_bus not in emp_map:
-                emp_map[asig.id_bus] = _empresa_label(eot) if eot else (asig.id_eot or "—")
+        .order_by(
+            BusEmpresa.fecha_fin_asignacion.desc(),
+            BusEmpresa.id_asignacion.desc(),
+        )
+    )
+    asig_map: dict[int, tuple[BusEmpresa, Optional[Eot]]] = {}
+    for asig, eot in asig_q.all():
+        prev = asig_map.get(asig.id_bus)
+        if prev is None:
+            asig_map[asig.id_bus] = (asig, eot)
+            continue
+        prev_asig, _ = prev
+        # Preferir motivo BAJA si hay empate de fecha
+        if (
+            (asig.motivo or "").upper() == "BAJA"
+            and (prev_asig.motivo or "").upper() != "BAJA"
+            and asig.fecha_fin_asignacion == prev_asig.fecha_fin_asignacion
+        ):
+            asig_map[asig.id_bus] = (asig, eot)
+
+    items: list[dict[str, Any]] = []
+    for bus in buses:
+        asig, eot = asig_map.get(bus.id_bus, (None, None))
+        fec = asig.fecha_fin_asignacion if asig else None
+        if anio is not None:
+            if not fec or fec.year != anio:
+                continue
+        empresa = _empresa_label(eot) if eot else (
+            (asig.id_eot if asig else None) or (asig.observaciones if asig else None) or "—"
+        )
+        items.append(
+            {
+                "orden": bus.numero_orden,
+                "marca": bus.marca.nombre if bus.marca else "—",
+                "anio_bus": bus.año,
+                "chasis": bus.numero_chassis,
+                "rua": bus.rua or "",
+                "empresa": empresa,
+                "fecha_baja": fec,
+                "motivo": (asig.motivo if asig else None) or "BAJA",
+                "meu": (asig.normativa if asig else None) or "—",
+                "estado": "BAJA",
+                "anio_periodo": fec.year if fec else None,
+            }
+        )
+    return items
+
+
+async def reporte_bajas(db: AsyncSession, anio: Optional[int] = None) -> dict:
+    """Listado estilo PLANILLA DE BAJA DE BUSES {año}.xlsx, filtrable por periodo."""
+    from app.services.bajas_planilla_oficial import anios_con_planilla, leer_planilla
+
+    anios_doc = anios_con_planilla()
+    anios = sorted(set(anios_doc) | {HOY().year, HOY().year - 1})
+
+    fuente_doc = anio is not None and anio in anios_doc
+    fuente_todos_doc = anio is None and bool(anios_doc)
+
+    if fuente_doc:
+        oficiales = leer_planilla(anio)
+        db_map = await _mapa_buses_por_chasis(db)
+        rows_src = []
+        for item in oficiales:
+            bus = db_map.get(item["chasis_norm"])
+            item = dict(item)
+            item["estado"] = bus.estado_bus if bus else "NO EN BD"
+            rows_src.append(item)
+        titulo = f"UNIDADES DADAS DE BAJA EN EL AÑO {anio}"
+        nota = (
+            f"Planilla oficial {anio} · {len(rows_src)} unidades · "
+            f"mismo criterio que PLANILLA DE BAJA DE BUSES {anio}.xlsx"
+        )
+        fuente = f"BAJA DE BUSES/PLANILLA DE BAJA DE BUSES {anio}.xlsx"
+    elif fuente_todos_doc:
+        db_map = await _mapa_buses_por_chasis(db)
+        rows_src = []
+        for y in anios_doc:
+            for item in leer_planilla(y):
+                bus = db_map.get(item["chasis_norm"])
+                item = dict(item)
+                item["estado"] = bus.estado_bus if bus else "NO EN BD"
+                rows_src.append(item)
+        titulo = "UNIDADES DADAS DE BAJA — todos los periodos"
+        nota = (
+            f"Planillas oficiales {', '.join(str(y) for y in anios_doc)} · "
+            f"{len(rows_src)} unidades"
+        )
+        fuente = "BAJA DE BUSES/PLANILLA DE BAJA DE BUSES {año}.xlsx"
+    else:
+        rows_src = await _bajas_desde_db(db, anio)
+        if anio:
+            titulo = f"UNIDADES DADAS DE BAJA EN EL AÑO {anio}"
+            nota = f"Bajas del sistema con fecha de cierre en {anio} · {len(rows_src)} unidades"
+        else:
+            titulo = "UNIDADES DADAS DE BAJA — todos los periodos"
+            nota = f"Buses en estado BAJA · {len(rows_src)} unidades"
+        fuente = "registro_habilitacion.buses + bus_empresa"
 
     headers = [
-        "Nº", "Nº Orden", "Marca", "Año", "Chasis", "RUA",
-        "Tipo carrocería", "Marca carrocería",
-        "Fecha ITV", "Vencimiento ITV", "Situación ITV", "Empresa",
+        "Nº", "Nº de orden", "Marca", "Año", "Nº chassis", "RUA",
+        "Empresa - línea", "Fecha de baja", "Motivo o causal de baja",
+        "Nº de MEU y observación", "Estado en sistema",
     ]
     rows: list[list[Any]] = []
-    for n, bus in enumerate(buses, 1):
-        itv = itv_map.get(bus.id_bus)
-        sit = None
-        if itv:
-            sit = "APROBADA" if itv.fecha_vencimiento >= HOY() else "VENCIDA"
+    for n, item in enumerate(rows_src, 1):
+        fec = item.get("fecha_baja")
+        fec_s = fec.isoformat() if isinstance(fec, date) else (fec or "—")
         rows.append([
             n,
-            bus.numero_orden,
-            bus.marca.nombre if bus.marca else "—",
-            bus.año,
-            bus.numero_chassis,
-            bus.rua,
-            bus.tipo_carroceria.descripcion if bus.tipo_carroceria else "—",
-            bus.marca_carroceria.nombre if bus.marca_carroceria else "—",
-            itv.fecha_itv.isoformat() if itv and itv.fecha_itv else "—",
-            itv.fecha_vencimiento.isoformat() if itv and itv.fecha_vencimiento else "—",
-            sit or "—",
-            emp_map.get(bus.id_bus, "—"),
+            item.get("orden") if item.get("orden") not in (None, "") else "—",
+            item.get("marca") or "—",
+            item.get("anio_bus") if item.get("anio_bus") not in (None, "") else "—",
+            item.get("chasis") or "—",
+            item.get("rua") or "—",
+            item.get("empresa") or "—",
+            fec_s,
+            item.get("motivo") or "—",
+            item.get("meu") or "—",
+            item.get("estado") or "—",
         ])
-    return _pack("bajas", headers, rows, f"Buses INACTIVO · {HOY().isoformat()}")
+
+    packed = _pack("bajas", headers, rows, nota)
+    packed["titulo"] = titulo
+    packed["anio"] = anio
+    packed["anios_disponibles"] = anios
+    packed["filtro"] = "periodo_anio"
+    packed["fuente"] = fuente
+    if packed.get("filas"):
+        packed["filas"][0] = [titulo]
+    return packed
 
 
 async def reporte_oper_reser_declar(db: AsyncSession) -> dict:
@@ -778,8 +888,10 @@ HANDLERS = {
 }
 
 
-async def obtener_reporte(db: AsyncSession, key: str) -> dict:
+async def obtener_reporte(db: AsyncSession, key: str, anio: Optional[int] = None) -> dict:
     handler = HANDLERS.get(key)
     if not handler:
         raise KeyError(f"Reporte desconocido: {key}")
+    if key == "bajas":
+        return await reporte_bajas(db, anio=anio)
     return await handler(db)

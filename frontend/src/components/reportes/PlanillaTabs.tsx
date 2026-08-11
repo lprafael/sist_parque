@@ -24,9 +24,12 @@ function safeFilename(name: string): string {
     .slice(0, 80) || 'reporte'
 }
 
+const ANIO_ACTUAL = new Date().getFullYear()
+
 export default function PlanillaTabs() {
   const [tab, setTab] = useState('cuadro_edad')
   const [downloading, setDownloading] = useState(false)
+  const [anioBajas, setAnioBajas] = useState<number | ''>(ANIO_ACTUAL)
 
   const { data: pestanasData } = useQuery({
     queryKey: ['reportes-planilla-pestanas'],
@@ -49,8 +52,11 @@ export default function PlanillaTabs() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['reportes-planilla-db', tab],
-    queryFn: () => reportesApi.planillaReporte(tab),
+    queryKey: ['reportes-planilla-db', tab, tab === 'bajas' ? anioBajas : null],
+    queryFn: () => reportesApi.planillaReporte(
+      tab,
+      tab === 'bajas' && anioBajas !== '' ? { anio: anioBajas } : undefined,
+    ),
     enabled: !!tab,
   })
 
@@ -72,9 +78,14 @@ export default function PlanillaTabs() {
     if (!tab || downloading) return
     setDownloading(true)
     try {
-      const response = await reportesApi.planillaReporteExcel(tab)
+      const response = await reportesApi.planillaReporteExcel(
+        tab,
+        tab === 'bajas' && anioBajas !== '' ? { anio: anioBajas } : undefined,
+      )
       const label = pestanaActiva?.label || reporte?.hoja || tab
-      const fecha = reporte?.fecha || new Date().toISOString().slice(0, 10)
+      const fecha = tab === 'bajas' && anioBajas !== ''
+        ? String(anioBajas)
+        : (reporte?.fecha || new Date().toISOString().slice(0, 10))
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
@@ -155,6 +166,33 @@ export default function PlanillaTabs() {
               </div>
             )}
           </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {tab === 'bajas' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.85rem' }}>
+              <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Periodo (año)</span>
+              <select
+                className="form-control"
+                style={{ width: 140 }}
+                value={anioBajas}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setAnioBajas(v === '' ? '' : Number(v))
+                }}
+              >
+                <option value="">Todos</option>
+                {Array.from(new Set([
+                  ...(reporte?.anios_disponibles ?? []),
+                  ANIO_ACTUAL - 1,
+                  ANIO_ACTUAL,
+                ]))
+                  .filter((y): y is number => typeof y === 'number' && Number.isFinite(y))
+                  .sort((a, b) => b - a)
+                  .map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+              </select>
+            </label>
+          )}
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -164,6 +202,7 @@ export default function PlanillaTabs() {
             <Download size={14} />
             <span>{downloading ? 'Generando…' : 'Excel'}</span>
           </button>
+          </div>
         </div>
 
         {errMsg && (

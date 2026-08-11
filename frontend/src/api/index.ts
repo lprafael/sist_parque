@@ -147,10 +147,10 @@ export const reportesApi = {
   descargarBusesExcel: (params?: Record<string, string | number | boolean>) =>
     api.get('/reportes/buses/excel', { params, responseType: 'blob' }),
   planillaPestanas: () => api.get('/reportes/planilla/pestanas'),
-  planillaReporte: (key: string) =>
-    api.get(`/reportes/planilla/reporte/${key}`, { timeout: 120000 }),
-  planillaReporteExcel: (key: string) =>
-    api.get(`/reportes/planilla/reporte/${key}/excel`, { responseType: 'blob', timeout: 180000 }),
+  planillaReporte: (key: string, params?: { anio?: number }) =>
+    api.get(`/reportes/planilla/reporte/${key}`, { params, timeout: 120000 }),
+  planillaReporteExcel: (key: string, params?: { anio?: number }) =>
+    api.get(`/reportes/planilla/reporte/${key}/excel`, { params, responseType: 'blob', timeout: 180000 }),
   planillaEstado: () => api.get('/reportes/planilla/estado'),
   planillaHojas: () => api.get('/reportes/planilla/hojas'),
   planillaHoja: (nombre: string, params?: { page?: number; page_size?: number }) =>

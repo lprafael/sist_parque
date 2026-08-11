@@ -11,7 +11,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Bus, BusEmpresa, Eot, ItvBus
+from app.models import Bus, BusEmpresa, Eot, EotLinea, ItvBus, Linea, Zona
 
 HOY = date.today
 
@@ -28,80 +28,6 @@ PESTANAS = [
     {"key": "buses_electricos", "label": "BUSES ELECTRICOS", "titulo": "Buses eléctricos por empresa"},
 ]
 
-# Orden y zonales del Excel ITV → hoja CUADRO DE EDAD (match por tokens de nombre)
-ZONALES_CUADRO_EDAD: list[dict[str, Any]] = [
-    {
-        "titulo": "Zonal 1 (San Lorenzo - Capiatá - J.A.Saldívar)",
-        "empresas": [
-            {"n": 1, "linea": "12 Y 43", "empresa": "Magno SA", "match": ["MAGNO"]},
-            {"n": 2, "linea": "19", "empresa": "Gonzalez Quiñonez SRL", "match": ["GONZALEZ", "QUINONEZ"]},
-            {"n": 3, "linea": "45-50-56", "empresa": "La Sanlorenzana S.A. de Transporte y T.", "match": ["SANLORENZANA"]},
-            {"n": 4, "linea": "53-58-128", "empresa": "Capiatá S.R.L.", "match": ["CAPIATA"]},
-            {"n": None, "linea": "E1,E2 Y E3", "empresa": "ARAPOTI", "match": ["ARAPOTI"]},
-            {"n": 5, "linea": "10-21 y 96", "empresa": "Aldana S.A.", "match": ["ALDANA"]},
-        ],
-    },
-    {
-        "titulo": "Zonal 2 (M.R. Alonso - Limpio - Bajo Chaco)",
-        "empresas": [
-            {"n": 6, "linea": "5 CH.", "empresa": "La Chaqueña S.A.T.C.", "match": ["CHAQUENA"]},
-            {"n": 7, "linea": "34", "empresa": "Ciudad de Limpio S.R.L.", "match": ["CIUDAD", "LIMPIO"]},
-            {"n": 8, "linea": "36", "empresa": "Campo Limpio S.A.", "match": ["CAMPO", "LIMPIO"]},
-            {"n": 9, "linea": "40", "empresa": "ADUSA", "match": ["USUARIOS"]},
-            {"n": 10, "linea": "35", "empresa": "EL BUS S.A.", "match": ["EL BUS"]},
-            {"n": 11, "linea": "44", "empresa": "XIMEX S.A.", "match": ["XIMEX"]},
-            {"n": 12, "linea": "101-A-102", "empresa": "Coop. Puerto Elseño Ko Che Ltda.", "match": ["ELSE"]},
-            {"n": 13, "linea": "101-B", "empresa": "Puerto Falcon SACI", "match": ["FALCON"]},
-        ],
-    },
-    {
-        "titulo": "Zonal 3 (Luque - Areguá)",
-        "empresas": [
-            {"n": 14, "linea": "5", "empresa": "Ciudad de Luque S.R.L.", "match": ["CIUDAD", "LUQUE"]},
-            {"n": 15, "linea": "11 y 203", "empresa": "Grupo Bene S.A.", "match": ["GRUPO", "BENE"]},
-            {"n": 16, "linea": "28", "empresa": "Gral. Aquino S.R.L.", "match": ["AQUINO"]},
-            {"n": 17, "linea": "30", "empresa": "Vanguardia S.A.C.I.", "match": ["VANGUARDIA"]},
-            {"n": 18, "linea": "49 y 220", "empresa": "La Limpeña S.R.L.", "match": ["LIMPENA"]},
-            {"n": 19, "linea": "110", "empresa": "Cerro Koi S.A.", "match": ["CERRO", "KOI"]},
-            {"n": 20, "linea": "111", "empresa": "Aregüeña S.A.", "match": ["AREGUE"]},
-        ],
-    },
-    {
-        "titulo": "Zonal 4 (Fernando de la Mora)",
-        "empresas": [],
-    },
-    {
-        "titulo": "Zonal 5 (Ñemb., V. Elisa, S. Antonio, Ytor., Guaram.)",
-        "empresas": [
-            {"n": 21, "linea": "15-1-2-3-4 Y 47", "empresa": "Automotores Guaraní S.R.L.", "match": ["GUARANI"]},
-            {"n": 22, "linea": "88", "empresa": "La Lomita S.A.", "match": ["LOMITA"]},
-            {"n": 23, "linea": "18 - 26 y 52", "empresa": "Lince S.R.L.", "match": ["LINCE"]},
-            {"n": 24, "linea": "38", "empresa": "Mariscal López S.R.L.", "match": ["MARISCAL"]},
-            {"n": 25, "linea": "54", "empresa": "G.M. de T y T S.R.L.", "match": ["GM T"]},
-        ],
-    },
-    {
-        "titulo": "Zonal 6 (Lambaré)",
-        "empresas": [
-            {"n": 30, "linea": "48-51 Y 85", "empresa": "San Isidro S.R.L.", "match": ["SAN ISIDRO"]},
-            {"n": 31, "linea": "8 y 31", "empresa": "De la Conquista S.A.", "match": ["CONQUISTA"]},
-            {"n": 32, "linea": "23-24 Y 33", "empresa": "TTL Lambaré S.A.", "match": ["TTL"]},
-            {"n": 33, "linea": "41", "empresa": "1° de diciembre S.R.L.", "match": ["DICIEMBRE"]},
-        ],
-    },
-    {
-        "titulo": "Zonal 7 (ACECOR)",
-        "empresas": [
-            {"n": 34, "linea": "165 y 27", "empresa": "Ñandutí S.A.", "match": ["ANDUTI"]},
-            {"n": 35, "linea": "232", "empresa": "Ciudad de Villeta", "match": ["VILLETA"]},
-            {"n": 36, "linea": "454", "empresa": "3 de febrero S.A.", "match": ["FEBRERO"]},
-            {"n": 37, "linea": "187", "empresa": "San José Obrero S.A.", "match": ["OBRERO"]},
-            {"n": 38, "linea": "233", "empresa": "16 de Noviembre S.R.L.", "match": ["NOVIEMBRE"]},
-            {"n": 39, "linea": "242", "empresa": "Ypacarai S.A.", "match": ["YPACARAI"]},
-        ],
-    },
-]
-
 _MESES_ES = [
     "enero", "febrero", "marzo", "abril", "mayo", "junio",
     "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
@@ -116,22 +42,82 @@ def _fold(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def _match_eot(eots: list[Eot], tokens: list[str]) -> Optional[Eot]:
-    toks = [_fold(t) for t in tokens if t]
-    if not toks:
-        return None
-    best: Optional[Eot] = None
-    best_score = -1
-    for eot in eots:
-        nom = _fold(eot.eot_nombre or "")
-        if not nom:
+def _nat_key(s: str) -> list:
+    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", s or "")]
+
+
+def _split_linea_tokens(raw: str) -> set[str]:
+    s = _fold(raw)
+    if not s:
+        return set()
+    parts = [p for p in re.split(r"[\s]+", s) if p and p != "Y"]
+    tokens = set(parts)
+    tokens.add(re.sub(r"\s+", "", s))
+    m = re.fullmatch(r"ELECTRICO\s*(\d+)", s)
+    if m:
+        return {f"E{m.group(1)}", f"ELECTRICO{m.group(1)}", s}
+    return tokens
+
+
+def _label_lineas(numeros: list[str]) -> str:
+    shorts: list[str] = []
+    seen: set[str] = set()
+    for n in sorted({(x or "").strip() for x in numeros if x}, key=_nat_key):
+        m = re.fullmatch(r"(?i)electrico\s*(\d+)", n)
+        label = f"E{m.group(1)}" if m else n
+        if label not in seen:
+            seen.add(label)
+            shorts.append(label)
+    if len(shorts) <= 2:
+        return " Y ".join(shorts)
+    return "-".join(shorts)
+
+
+def _linea_match_eot_legacy(numero_linea: str, eot_linea: str) -> bool:
+    """Cruza numero_linea con eots.eot_linea (legado, p.ej. '53-58-128')."""
+    lin = _split_linea_tokens(numero_linea)
+    eot = _split_linea_tokens(eot_linea)
+    return bool(lin and eot and (lin & eot))
+
+
+async def _explotacion_por_linea(
+    db: AsyncSession,
+    eots_by_id: dict[int, Eot],
+    lineas: list[Linea],
+) -> dict[int, list[Eot]]:
+    """
+    id_linea → EOTs que la explotan.
+    Prioridad: public.eot_linea vigente; si está vacío, eots.eot_linea (texto).
+    """
+    hoy = HOY()
+    res = await db.execute(select(EotLinea))
+    vinculos = list(res.scalars().all())
+    vigentes = [
+        v for v in vinculos
+        if v.fecha_fin is None or v.fecha_fin >= hoy
+    ]
+    out: dict[int, list[Eot]] = defaultdict(list)
+    if vigentes:
+        seen: set[tuple[int, int]] = set()
+        for v in vigentes:
+            eot = eots_by_id.get(v.eot_id)
+            if not eot:
+                continue
+            key = (v.id_linea, eot.eot_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            out[v.id_linea].append(eot)
+        return out
+
+    for lin in lineas:
+        num = (lin.numero_linea or "").strip()
+        if not num:
             continue
-        if all(t in nom for t in toks):
-            score = sum(len(t) for t in toks) * 10 - abs(len(nom) - sum(len(t) for t in toks))
-            if score > best_score:
-                best_score = score
-                best = eot
-    return best
+        for eot in eots_by_id.values():
+            if _linea_match_eot_legacy(num, eot.eot_linea or ""):
+                out[lin.id_linea].append(eot)
+    return out
 
 
 def _pct(num: float, den: float) -> Optional[float]:
@@ -226,45 +212,32 @@ def _es_electrico(bus: Bus) -> bool:
     return "ELECTR" in comb
 
 
-async def _eots_para_cuadro(db: AsyncSession) -> list[Eot]:
-    """EOTs candidatas al cuadro (permisionarias o con parque / situacion activa)."""
-    eots_con_parque = (
-        select(BusEmpresa.id_eot)
-        .join(Bus, Bus.id_bus == BusEmpresa.id_bus)
-        .where(
-            BusEmpresa.fecha_fin_asignacion.is_(None),
-            Bus.estado_bus == "ACTIVO",
-            BusEmpresa.id_eot.is_not(None),
-        )
-        .distinct()
-    )
-    res = await db.execute(
-        select(Eot).where(
-            or_(
-                Eot.permisionario == True,
-                Eot.situacion == 1,
-                Eot.id_eot_vmt_hex.in_(eots_con_parque),
-            )
-        )
-    )
-    return list(res.scalars().all())
-
-
 def _fila_vacia(ncols: int) -> list[Any]:
     return [None] * ncols
 
 
 async def reporte_cuadro_edad(db: AsyncSession) -> dict:
     """
-    Replica el layout de la hoja Excel «CUADRO DE EDAD»:
-    título, zonales, años 2006…, Parque Total / Falt-Exce y PARQUE Actual.
+    Replica el layout de la hoja Excel «CUADRO DE EDAD» con datos vivos:
+    public.zonas → public.lineas → empresa explotadora (eot_linea / eots.eot_linea).
     """
     hoy = HOY()
     anio_actual = hoy.year
     anios = list(range(2006, anio_actual + 2))
     buses_map = await _buses_por_eot(db, solo_activos=True)
-    eots = await _eots_para_cuadro(db)
-    used_ids: set[str] = set()
+    eots = list((await db.execute(select(Eot))).scalars().all())
+    eots_by_id = {e.eot_id: e for e in eots if e.eot_id is not None}
+
+    zonas = list((await db.execute(select(Zona).order_by(Zona.id_zona))).scalars().all())
+    lineas = list((await db.execute(
+        select(Linea).where(Linea.id_zona.is_not(None)).order_by(Linea.numero_linea)
+    )).scalars().all())
+    lineas_por_zona: dict[int, list[Linea]] = defaultdict(list)
+    for lin in lineas:
+        if lin.id_zona is not None:
+            lineas_por_zona[lin.id_zona].append(lin)
+
+    explotacion = await _explotacion_por_linea(db, eots_by_id, lineas)
 
     headers = [
         "Nº", "Línea", "Empresa",
@@ -274,10 +247,8 @@ async def reporte_cuadro_edad(db: AsyncSession) -> dict:
     ]
     ncols = len(headers)
 
-    def build_data_row(spec: dict, eot: Optional[Eot]) -> dict[str, Any]:
+    def build_data_row(n: Optional[int], linea_label: str, eot: Optional[Eot]) -> dict[str, Any]:
         buses = buses_map.get(eot.id_eot_vmt_hex, []) if eot and eot.id_eot_vmt_hex else []
-        if eot and eot.id_eot_vmt_hex:
-            used_ids.add(eot.id_eot_vmt_hex)
         counts = {a: 0 for a in anios}
         for b in buses:
             if isinstance(b.año, int) and b.año in counts:
@@ -288,16 +259,14 @@ async def reporte_cuadro_edad(db: AsyncSession) -> dict:
         autoriz = int(eot.autorizado or 0) if eot else 0
         operat = int(eot.operativo or 0) if eot else 0
         reserv = int(eot.reserva or 0) if eot else 0
-        # Declar.(d) = parque contado por año (como en la planilla)
         declar = parque_total
         falt = parque_total - autoriz
-        por_anio = [counts[a] for a in anios]
         return {
             "tipo": "data",
-            "n": spec.get("n"),
-            "linea": spec.get("linea") or ((eot.eot_linea or "").strip() if eot else ""),
-            "empresa": spec.get("empresa") or ((eot.eot_nombre or "").strip() if eot else "—"),
-            "por_anio": por_anio,
+            "n": n,
+            "linea": linea_label,
+            "empresa": ((eot.eot_nombre or "").strip() if eot else "—"),
+            "por_anio": [counts[a] for a in anios],
             "parque_total": parque_total,
             "falt_exce": falt,
             "autoriz": autoriz,
@@ -357,15 +326,35 @@ async def reporte_cuadro_edad(db: AsyncSession) -> dict:
     filas_grid.append(["PARQUE OPERATIVO DE EMPRESAS"] + [None] * (ncols - 1))
     row_kinds.append("banner")
 
-    for z in ZONALES_CUADRO_EDAD:
+    n_seq = 0
+    for z in zonas:
         filas_data: list[dict[str, Any]] = []
-        for spec in z["empresas"]:
-            eot = _match_eot(eots, spec.get("match") or [])
-            filas_data.append(build_data_row(spec, eot))
+        grupos: dict[int, dict[str, Any]] = {}
+        sin_eot: list[Linea] = []
+        for lin in lineas_por_zona.get(z.id_zona, []):
+            eots_lin = explotacion.get(lin.id_linea) or []
+            if not eots_lin:
+                sin_eot.append(lin)
+                continue
+            for eot in eots_lin:
+                g = grupos.setdefault(eot.eot_id, {"eot": eot, "lineas": []})
+                g["lineas"].append(lin)
+
+        for g in sorted(grupos.values(), key=lambda x: _nat_key((x["eot"].eot_nombre or ""))):
+            n_seq += 1
+            label = _label_lineas([ln.numero_linea or "" for ln in g["lineas"]])
+            filas_data.append(build_data_row(n_seq, label, g["eot"]))
+        for lin in sin_eot:
+            n_seq += 1
+            filas_data.append(build_data_row(n_seq, (lin.numero_linea or "—").strip(), None))
+
+        titulo_zonal = z.nombre or f"Zonal {z.id_zona}"
+        if z.descripcion:
+            titulo_zonal = f"{titulo_zonal} ({z.descripcion})"
 
         # Cabecera de zonal
         z_header = _fila_vacia(ncols)
-        z_header[1] = z["titulo"]
+        z_header[1] = titulo_zonal
         z_header[3 + len(anios)] = "Parque Total"
         z_header[4 + len(anios)] = "Parque Falt/Exce"
         z_header[5 + len(anios)] = "PARQUE Actual:"
@@ -390,7 +379,8 @@ async def reporte_cuadro_edad(db: AsyncSession) -> dict:
         row_kinds.append("subtotal")
 
         zonales_out.append({
-            "titulo": z["titulo"],
+            "titulo": titulo_zonal,
+            "id_zona": z.id_zona,
             "filas": filas_data,
             "subtotal": sub,
         })
@@ -438,7 +428,7 @@ async def reporte_cuadro_edad(db: AsyncSession) -> dict:
         "total_filas": len(all_data),
         "filas": filas_grid,
         "row_kinds": row_kinds,
-        "fuente": "registro_habilitacion + public.eots",
+        "fuente": "public.zonas + public.lineas + public.eots",
         "fecha": hoy.isoformat(),
     }
 

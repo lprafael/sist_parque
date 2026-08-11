@@ -8,7 +8,8 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
 from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, TipoServicio, ItvBus, BusEmpresa, Eot, Auditoria
-from app.schemas import BusCreate, BusUpdate, BusOut, TipoServicioOut
+from app.schemas import BusBajaIn, BusBajaOut, BusCreate, BusUpdate, BusOut, TipoServicioOut
+from app.services.bus_baja import CAUSALES_BAJA, aplicar_baja_buses
 
 router = APIRouter(prefix="/buses", tags=["Buses"])
 
@@ -59,7 +60,12 @@ async def listar_buses(
             Bus.numero_chassis.ilike(term),
         ))
     if estado_bus:
-        filters.append(Bus.estado_bus == estado_bus.upper())
+        est = estado_bus.upper()
+        # INACTIVO quedó como alias histórico; el parque no operativo está en BAJA
+        if est == "INACTIVO":
+            filters.append(Bus.estado_bus.in_(["INACTIVO", "BAJA"]))
+        else:
+            filters.append(Bus.estado_bus == est)
     if id_marca:
         filters.append(Bus.id_marca == id_marca)
     if empresa:
@@ -213,6 +219,12 @@ async def crear_bus(
     if dup.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="RUA o Nº Chassis ya registrado")
 
+    if (body.estado_bus or "").upper() == "BAJA":
+        raise HTTPException(
+            status_code=400,
+            detail="Para dar de baja use POST /buses/{id}/baja (motivo + cierre de asignación + ITV).",
+        )
+
     bus = Bus(**body.model_dump())
     db.add(bus)
     await db.flush()
@@ -243,6 +255,12 @@ async def actualizar_bus(
 
     old_data = {c.name: getattr(bus, c.name) for c in Bus.__table__.columns}
     update_data = body.model_dump(exclude_unset=True)
+    nuevo_estado = (update_data.get("estado_bus") or "").upper()
+    if nuevo_estado == "BAJA" and (bus.estado_bus or "").upper() != "BAJA":
+        raise HTTPException(
+            status_code=400,
+            detail="La baja formal se hace en POST /buses/{id}/baja (motivo, cierra asignación e invalida ITV).",
+        )
     for k, v in update_data.items():
         setattr(bus, k, v)
 
@@ -256,6 +274,71 @@ async def actualizar_bus(
     ))
     await db.commit()
     return await obtener_bus(id_bus, db)
+
+
+@router.post("/{id_bus}/baja", response_model=BusBajaOut)
+async def dar_de_baja_bus(
+    id_bus: int,
+    body: BusBajaIn,
+    db: AsyncSession = Depends(get_db),
+    user=Depends(require_roles("ADMIN", "SUPERVISOR", "OPERADOR")),
+):
+    """Baja formal: estado BAJA, cierra asignación vigente e invalida ITV vigente."""
+    bus = (await db.execute(select(Bus).where(Bus.id_bus == id_bus))).scalar_one_or_none()
+    if not bus:
+        raise HTTPException(status_code=404, detail="Bus no encontrado")
+    if (bus.estado_bus or "").upper() == "BAJA":
+        raise HTTPException(status_code=409, detail="El bus ya está dado de baja")
+
+    if body.causal == "OTRO" and not (body.causal_detalle or "").strip():
+        raise HTTPException(status_code=400, detail="Indique el detalle de la causal (OTRO)")
+
+    asig_activa = (
+        await db.execute(
+            select(BusEmpresa).where(
+                BusEmpresa.id_bus == id_bus,
+                BusEmpresa.fecha_fin_asignacion.is_(None),
+            )
+        )
+    ).scalar_one_or_none()
+    if asig_activa and body.fecha_baja < asig_activa.fecha_asignacion:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"fecha_baja ({body.fecha_baja}) no puede ser anterior "
+                f"al inicio de la asignación vigente ({asig_activa.fecha_asignacion})"
+            ),
+        )
+
+    nota = " | ".join(
+        p.strip()
+        for p in (body.causal_detalle, body.observaciones)
+        if p and p.strip()
+    )
+
+    applied = await aplicar_baja_buses(
+        db,
+        [bus],
+        fecha_baja=body.fecha_baja,
+        motivo_asignacion="BAJA",
+        causal=body.causal,
+        normativa=body.normativa,
+        observaciones=nota or None,
+        usuario=user.username,
+        enriquecer_asig=True,
+        auditar=True,
+    )
+    await db.commit()
+    out = await obtener_bus(id_bus, db)
+    return BusBajaOut(
+        id_bus=id_bus,
+        estado_bus=out.estado_bus,
+        fecha_baja=body.fecha_baja,
+        causal=body.causal,
+        asignacion_cerrada=applied["asignaciones_cerradas"] > 0,
+        itv_invalidadas=applied["itv_invalidadas"],
+        bus=out,
+    )
 
 
 @router.delete("/{id_bus}", status_code=status.HTTP_204_NO_CONTENT)
@@ -295,6 +378,12 @@ async def listar_tipos_carroceria(db: AsyncSession = Depends(get_db), _=Depends(
 async def listar_marcas_carroceria(db: AsyncSession = Depends(get_db), _=Depends(get_current_user)):
     result = await db.execute(select(MarcaCarroceria).order_by(MarcaCarroceria.nombre))
     return result.scalars().all()
+
+
+@router.get("/catalogo/causales-baja")
+async def listar_causales_baja(_=Depends(get_current_user)):
+    from app.services.bus_baja import CAUSAL_LABEL
+    return [{"codigo": k, "label": CAUSAL_LABEL[k]} for k in CAUSALES_BAJA]
 
 
 @router.get("/catalogo/tipos-servicio", response_model=list[TipoServicioOut])

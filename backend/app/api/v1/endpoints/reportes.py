@@ -211,7 +211,11 @@ async def exportar_buses_excel(
 
     filters = []
     if estado_bus:
-        filters.append(Bus.estado_bus == estado_bus.upper())
+        est = estado_bus.upper()
+        if est == "INACTIVO":
+            filters.append(Bus.estado_bus.in_(["INACTIVO", "BAJA"]))
+        else:
+            filters.append(Bus.estado_bus == est)
     if id_marca:
         filters.append(Bus.id_marca == id_marca)
     if id_tipo_servicio:

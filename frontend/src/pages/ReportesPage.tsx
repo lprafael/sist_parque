@@ -371,6 +371,7 @@ export default function ReportesPage() {
             <select className="form-control" value={estadoBus} onChange={e => setEstadoBus(e.target.value)}>
               <option value="">Todos</option>
               <option value="ACTIVO">Activo</option>
+              <option value="BAJA">Baja</option>
               <option value="INACTIVO">Inactivo</option>
             </select>
           </div>

@@ -23,6 +23,7 @@ from app.models import (
     TipoSeguro,
     TipoServicio,
 )
+from app.services.bus_baja import aplicar_baja_buses
 
 SCHEMA = "registro_habilitacion"
 DATA_START = 7
@@ -403,31 +404,16 @@ async def _aplicar_bajas_vs_general(
     if not candidatos:
         return set()
 
-    id_set = {b.id_bus for b in candidatos}
-    hoy = date.today()
-    for b in candidatos:
-        b.estado_bus = "BAJA"
-        result.buses_baja += 1
-
-    asig_res = await db.execute(
-        select(BusEmpresa).where(
-            BusEmpresa.id_bus.in_(id_set),
-            BusEmpresa.fecha_fin_asignacion.is_(None),
-        )
+    applied = await aplicar_baja_buses(
+        db,
+        candidatos,
+        fecha_baja=date.today(),
+        motivo_asignacion="BAJA",
+        enriquecer_asig=False,
+        auditar=False,
     )
-    for asig in asig_res.scalars().all():
-        asig.fecha_fin_asignacion = hoy
-        asig.estado_asignacion = "CERRADA"
-        if not asig.motivo:
-            asig.motivo = "BAJA"
-
-    itv_res = await db.execute(
-        select(ItvBus).where(ItvBus.id_bus.in_(id_set), ItvBus.es_vigente.is_(True))
-    )
-    for itv in itv_res.scalars().all():
-        itv.es_vigente = False
-
-    return id_set
+    result.buses_baja += applied["buses_baja"]
+    return set(applied["ids"])
 
 
 async def build_preview(db: AsyncSession, file_bytes: bytes) -> PreviewResult:

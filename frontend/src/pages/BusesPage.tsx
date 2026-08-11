@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { busesApi, empresasApi, itvApi } from '../api'
-import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock } from 'lucide-react'
+import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban } from 'lucide-react'
 import BusModal from '../components/buses/BusModal'
+import BajaModal from '../components/buses/BajaModal'
 import ItvHistoryModal from '../components/itv/ItvHistoryModal'
 import ItvModal from '../components/itv/ItvModal'
 
@@ -36,6 +37,8 @@ export default function BusesPage() {
   const [empresa, setEmpresa]         = useState(empresaParam)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [busToEdit, setBusToEdit]     = useState<any>(null)
+  const [isBajaOpen, setIsBajaOpen]   = useState(false)
+  const [busToBaja, setBusToBaja]     = useState<any>(null)
 
   // Modales ITV
   const [isHistoryOpen, setIsHistoryOpen]                 = useState(false)
@@ -46,7 +49,7 @@ export default function BusesPage() {
 
   const PAGE_SIZE = 25
 
-  const anyModalOpen = isModalOpen || isHistoryOpen || isItvModalOpen
+  const anyModalOpen = isModalOpen || isHistoryOpen || isItvModalOpen || isBajaOpen
 
   // Foco en el buscador al entrar y al cerrar modales
   useEffect(() => {
@@ -116,6 +119,11 @@ export default function BusesPage() {
   const handleOpenEdit = (bus: any) => {
     setBusToEdit(bus)
     setIsModalOpen(true)
+  }
+
+  const handleOpenBaja = (bus: any) => {
+    setBusToBaja(bus)
+    setIsBajaOpen(true)
   }
 
   const handleOpenHistory = (bus: any) => {
@@ -200,6 +208,7 @@ export default function BusesPage() {
             }}>
             <option value="">Todos los estados</option>
             <option value="ACTIVO">Activo</option>
+            <option value="BAJA">Baja</option>
             <option value="INACTIVO">Inactivo</option>
           </select>
           <select className="form-control" style={{ width: '180px' }}
@@ -343,6 +352,16 @@ export default function BusesPage() {
                           >
                             <Edit2 size={14} />
                           </button>
+                          {(bus.estado_bus || '').toUpperCase() !== 'BAJA' && (
+                            <button
+                              className="btn btn-secondary btn-sm btn-icon"
+                              onClick={() => handleOpenBaja(bus)}
+                              title="Dar de baja"
+                              style={{ color: '#f87171', borderColor: 'rgba(248,113,113,0.35)' }}
+                            >
+                              <Ban size={14} />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -378,6 +397,13 @@ export default function BusesPage() {
         marcas={marcasData?.data ?? []}
         tiposCarroceria={tiposData?.data ?? []}
         marcasCarroceria={marcasCarrData?.data ?? []}
+      />
+
+      <BajaModal
+        isOpen={isBajaOpen}
+        onClose={() => setIsBajaOpen(false)}
+        onSuccess={() => refetch()}
+        bus={busToBaja}
       />
 
       <ItvHistoryModal

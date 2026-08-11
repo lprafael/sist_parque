@@ -431,6 +431,46 @@ class Eot(Base):
     agency_lang         = Column(String)
 
 
+class Zona(Base):
+    """Agrupación zonal de líneas (public.zonas)."""
+    __tablename__ = "zonas"
+    __table_args__ = {"schema": "public"}
+
+    id_zona     = Column(Integer, primary_key=True)
+    nombre      = Column(String)
+    descripcion = Column(Text)
+
+
+class Linea(Base):
+    """Línea comercial (public.lineas), pertenece a una zona."""
+    __tablename__ = "lineas"
+    __table_args__ = {"schema": "public"}
+
+    id_linea            = Column(Integer, primary_key=True)
+    numero_linea        = Column(String)
+    nombre_comercial    = Column(Text)
+    estado              = Column(Boolean)
+    identificador_troncal = Column(Text)
+    id_uf               = Column(Integer)
+    id_zona             = Column(Integer)
+    color_hex           = Column(String)
+    route_type          = Column(Integer)
+    route_text_color    = Column(String)
+
+
+class EotLinea(Base):
+    """Explotación EOT ↔ línea (public.eot_linea). Vigente = fecha_fin IS NULL."""
+    __tablename__ = "eot_linea"
+    __table_args__ = {"schema": "public"}
+
+    id_eot_linea            = Column(Integer, primary_key=True)
+    eot_id                  = Column(Integer, nullable=False)
+    id_linea                = Column(Integer, nullable=False)
+    integracion_operativa   = Column(Boolean)
+    fecha_inicio            = Column(Date)
+    fecha_fin               = Column(Date)
+
+
 class Auxiliar(Base):
     """Tabla auxiliar de staging para importación desde Excel."""
     __tablename__ = "auxiliar"

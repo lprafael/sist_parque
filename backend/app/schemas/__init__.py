@@ -151,6 +151,34 @@ class BusUpdate(BaseModel):
     color: Optional[str] = None
     estado_bus: Optional[str] = None
 
+class BusBajaIn(BaseModel):
+    """Baja formal del parque: estado BAJA + cierra asignación + invalida ITV."""
+    fecha_baja: date
+    causal: str
+    causal_detalle: Optional[str] = None
+    normativa: Optional[str] = None
+    observaciones: Optional[str] = None
+
+    @field_validator("causal")
+    @classmethod
+    def causal_valida(cls, v: str) -> str:
+        from app.services.bus_baja import CAUSALES_BAJA
+        c = (v or "").strip().upper()
+        if c not in CAUSALES_BAJA:
+            raise ValueError(f"causal inválida. Use: {', '.join(CAUSALES_BAJA)}")
+        return c
+
+
+class BusBajaOut(BaseModel):
+    id_bus: int
+    estado_bus: str
+    fecha_baja: date
+    causal: str
+    asignacion_cerrada: bool
+    itv_invalidadas: int
+    bus: "BusOut"
+
+
 class BusOut(BusBase):
     id_bus: int
     fecha_registro: Optional[datetime] = None
@@ -498,3 +526,4 @@ class PaginatedResponse(BaseModel):
 # Update forward refs
 # ============================================================
 TokenResponse.model_rebuild()
+BusBajaOut.model_rebuild()

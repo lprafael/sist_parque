@@ -291,12 +291,20 @@ export default function BusModal({
               className="form-control"
               value={formData.estado_bus}
               onChange={e => setFormData({ ...formData, estado_bus: e.target.value })}
+              disabled={(busToEdit?.estado_bus || '').toUpperCase() === 'BAJA'}
             >
               <option value="ACTIVO">ACTIVO</option>
               <option value="INACTIVO">INACTIVO</option>
               <option value="EN_MANTENIMIENTO">EN MANTENIMIENTO</option>
-              <option value="BAJA">BAJA</option>
+              {(busToEdit?.estado_bus || '').toUpperCase() === 'BAJA' && (
+                <option value="BAJA">BAJA</option>
+              )}
             </select>
+            {(busToEdit?.estado_bus || '').toUpperCase() !== 'BAJA' && (
+              <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Para dar de baja use el botón de la lista (motivo + cierra asignación e ITV).
+              </p>
+            )}
           </div>
 
           <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>

@@ -29,6 +29,13 @@ export const busesApi = {
   obtener: (id: number) => api.get(`/buses/${id}`),
   crear: (data: unknown) => api.post('/buses', data),
   actualizar: (id: number, data: unknown) => api.put(`/buses/${id}`, data),
+  darDeBaja: (id: number, data: {
+    fecha_baja: string
+    causal: string
+    causal_detalle?: string
+    normativa?: string
+    observaciones?: string
+  }) => api.post(`/buses/${id}/baja`, data),
   eliminar: (id: number) => api.delete(`/buses/${id}`),
   marcas: () => api.get('/buses/catalogo/marcas'),
   tiposCarroceria: () => api.get('/buses/catalogo/tipos-carroceria'),

@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Bus, Building2, Wrench, Shield,
-  Bell, FileBarChart2, LogOut, FileText, Users, History, FileSpreadsheet
+  Bell, FileBarChart2, LogOut, FileText, Users, FileSpreadsheet
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import { useThemeStore } from '../stores/themeStore'
@@ -19,7 +19,6 @@ const navItems = [
   { to: '/importador',icon: FileSpreadsheet, label: 'Importar Excel', section: 'HERRAMIENTAS' },
   { to: '/reportes',  icon: FileBarChart2,   label: 'Reportes',    section: 'HERRAMIENTAS' },
   { to: '/usuarios',  icon: Users,           label: 'Usuarios',    section: 'SISTEMA' },
-  { to: '/auditoria', icon: History,         label: 'Auditoría',   section: 'SISTEMA' },
 ]
 
 export default function Sidebar({
@@ -56,7 +55,14 @@ export default function Sidebar({
 
   return (
     <aside className={`sidebar${open ? ' open' : ''}`} aria-hidden={!open}>
-      <div className="sidebar-logo">
+      <NavLink
+        to="/"
+        end
+        className="sidebar-logo"
+        onClick={() => {
+          if (window.innerWidth <= 768) onClose?.()
+        }}
+      >
         <img
           src={logoSrc}
           alt="Viceministerio de Transporte"
@@ -64,7 +70,7 @@ export default function Sidebar({
         />
         <div className="logo-title">Sistema de Gestión de<br />Parque Automotor</div>
         <div className="logo-sub">Depto. Registro y Habilitación</div>
-      </div>
+      </NavLink>
 
       <nav className="sidebar-nav">
         {sections.map(section => (

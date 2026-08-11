@@ -11,7 +11,6 @@ import SegurosPage    from './pages/SegurosPage'
 import DocumentosPage from './pages/DocumentosPage'
 import AlertasPage    from './pages/AlertasPage'
 import UsuariosPage   from './pages/UsuariosPage'
-import AuditoriaPage  from './pages/AuditoriaPage'
 import ImportadorPage from './pages/ImportadorPage'
 import ReportesPage   from './pages/ReportesPage'
 
@@ -98,14 +97,6 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <UsuariosPage />
-          </Layout>
-        </ProtectedRoute>
-      } />
-
-      <Route path="/auditoria" element={
-        <ProtectedRoute>
-          <Layout>
-            <AuditoriaPage />
           </Layout>
         </ProtectedRoute>
       } />

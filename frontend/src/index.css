@@ -199,8 +199,12 @@ a:hover { color: var(--brand-300); }
 }
 
 .sidebar-logo {
+  display: block;
   padding: 20px 18px 16px;
   border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
 }
 
 .sidebar-logo-img {

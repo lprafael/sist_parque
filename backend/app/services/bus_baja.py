@@ -12,7 +12,8 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Auditoria, Bus, BusEmpresa, ItvBus
+from app.models import Bus, BusEmpresa, ItvBus
+from app.services.sistema_logs import registrar_auditoria
 
 CAUSALES_BAJA = (
     "ANTIGUEDAD_20",
@@ -111,23 +112,23 @@ async def aplicar_baja_buses(
 
     if auditar and usuario:
         for b in candidatos:
-            db.add(
-                Auditoria(
-                    tabla_afectada="buses",
-                    id_registro=b.id_bus,
-                    accion="BAJA",
-                    datos_anteriores={"estado_bus": previos.get(b.id_bus)},
-                    datos_nuevos={
-                        "estado_bus": "BAJA",
-                        "fecha_baja": fecha_baja.isoformat(),
-                        "causal": causal,
-                        "normativa": normativa,
-                        "observaciones": observaciones,
-                        "asignacion_cerrada": any(a.id_bus == b.id_bus for a in asignaciones),
-                        "itv_invalidadas": sum(1 for i in itvs if i.id_bus == b.id_bus),
-                    },
-                    usuario=usuario,
-                )
+            await registrar_auditoria(
+                db,
+                accion="update",
+                tabla="buses",
+                usuario=usuario,
+                registro_id=b.id_bus,
+                datos_anteriores={"estado_bus": previos.get(b.id_bus)},
+                datos_nuevos={
+                    "estado_bus": "BAJA",
+                    "fecha_baja": fecha_baja.isoformat(),
+                    "causal": causal,
+                    "normativa": normativa,
+                    "observaciones": observaciones,
+                    "asignacion_cerrada": any(a.id_bus == b.id_bus for a in asignaciones),
+                    "itv_invalidadas": sum(1 for i in itvs if i.id_bus == b.id_bus),
+                },
+                detalles=f"Baja formal de bus id={b.id_bus} causal={causal}",
             )
 
     return {

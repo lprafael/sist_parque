@@ -7,7 +7,8 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import SeguroBus, CompaniaSeguro, TipoSeguro, Bus, Auditoria
+from app.models import SeguroBus, CompaniaSeguro, TipoSeguro, Bus
+from app.services.sistema_logs import registrar_auditoria
 from app.schemas import (
     SeguroBusCreate, SeguroBusUpdate, SeguroBusOut,
     CompaniaSeguroCreate, CompaniaSeguroOut, TipoSeguroOut
@@ -162,13 +163,16 @@ async def crear_seguro(
 
     seg = SeguroBus(**body.model_dump())
     db.add(seg)
-    db.add(Auditoria(
-        tabla_afectada="seguros_bus",
-        id_registro=body.id_bus,
-        accion="INSERT",
+    await db.flush()
+    await registrar_auditoria(
+        db,
+        accion="insert",
+        tabla="seguros_bus",
+        usuario=user,
+        registro_id=seg.id_seguro or body.id_bus,
         datos_nuevos=body.model_dump(mode="json"),
-        usuario=user.username,
-    ))
+        detalles=f"Alta seguro bus={body.id_bus}",
+    )
     await db.commit()
 
     seg = (await db.execute(
@@ -218,6 +222,15 @@ async def actualizar_seguro(
     for k, v in data.items():
         setattr(seg, k, v)
 
+    await registrar_auditoria(
+        db,
+        accion="update",
+        tabla="seguros_bus",
+        usuario=user,
+        registro_id=id_seguro,
+        datos_nuevos=data,
+        detalles=f"Actualización seguro id={id_seguro}",
+    )
     await db.commit()
     await db.refresh(seg)
     seg = (await db.execute(

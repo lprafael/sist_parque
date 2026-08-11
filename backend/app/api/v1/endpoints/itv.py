@@ -6,7 +6,8 @@ from sqlalchemy import select, func, and_, update
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import ItvBus, Bus, Auditoria
+from app.models import ItvBus, Bus
+from app.services.sistema_logs import registrar_auditoria
 from app.schemas import ItvBusCreate, ItvBusUpdate, ItvBusOut, HistorialItvOut
 
 router = APIRouter(prefix="/itv", tags=["ITV - Inspección Técnica"])
@@ -98,8 +99,16 @@ async def registrar_itv(
 
     itv = ItvBus(**body.model_dump())
     db.add(itv)
-    db.add(Auditoria(tabla_afectada="itv_bus", id_registro=body.id_bus, accion="INSERT",
-                     datos_nuevos=body.model_dump(mode="json"), usuario=user.username))
+    await db.flush()
+    await registrar_auditoria(
+        db,
+        accion="insert",
+        tabla="itv_bus",
+        usuario=user,
+        registro_id=itv.id_itv or body.id_bus,
+        datos_nuevos=body.model_dump(mode="json"),
+        detalles=f"Alta ITV bus={body.id_bus}",
+    )
     await db.commit()
     await db.refresh(itv)
     est, dias = estado_itv(itv.fecha_vencimiento)
@@ -129,6 +138,15 @@ async def actualizar_itv(
 
     for k, v in update_data.items():
         setattr(itv, k, v)
+    await registrar_auditoria(
+        db,
+        accion="update",
+        tabla="itv_bus",
+        usuario=user,
+        registro_id=id_itv,
+        datos_nuevos=update_data,
+        detalles=f"Actualización ITV id={id_itv}",
+    )
     await db.commit()
     await db.refresh(itv)
     est, dias = estado_itv(itv.fecha_vencimiento)

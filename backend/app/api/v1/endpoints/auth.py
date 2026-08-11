@@ -9,8 +9,9 @@ from app.core.security import (
     verify_password, create_access_token, create_refresh_token,
     decode_token, get_current_user, normalize_role, SISTEMA_ID_PARQUE
 )
-from app.models import Usuario, UsuarioSistemaRol, LogAcceso
+from app.models import Usuario, UsuarioSistemaRol
 from app.schemas import LoginRequest, TokenResponse, UsuarioOut, RefreshRequest
+from app.services.sistema_logs import registrar_acceso
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
@@ -28,14 +29,15 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
     user: Usuario = result.scalar_one_or_none()
 
     if not user or not verify_password(body.password, user.hashed_password):
-        db.add(LogAcceso(
-            usuario_id=user.id if user else None,
+        await registrar_acceso(
+            db,
             username=body.username,
             accion="login_failed",
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent"),
-            exitoso=False
-        ))
+            exitoso=False,
+            usuario_id=user.id if user else None,
+            request=request,
+            detalles={"motivo": "credenciales_incorrectas"},
+        )
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -43,6 +45,16 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
         )
 
     if not user.activo:
+        await registrar_acceso(
+            db,
+            username=user.username,
+            accion="login_failed",
+            exitoso=False,
+            usuario_id=user.id,
+            request=request,
+            detalles={"motivo": "usuario_inactivo"},
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Usuario inactivo"
@@ -60,6 +72,16 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
                 break
 
     if not user_rol and user.username != 'admin':
+        await registrar_acceso(
+            db,
+            username=user.username,
+            accion="login_failed",
+            exitoso=False,
+            usuario_id=user.id,
+            request=request,
+            detalles={"motivo": "sin_permiso_sigpa", "sistema_id": SISTEMA_ID_PARQUE},
+        )
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="El usuario no tiene permisos habilitados en este sistema."
@@ -68,16 +90,17 @@ async def login(body: LoginRequest, request: Request, db: AsyncSession = Depends
     norm_role = normalize_role(user_rol or 'ADMIN')
     user.rol = norm_role
 
-    # Actualizar último acceso y registrar log
+    # Actualizar último acceso y registrar log (sistema_id = 5 SIGPA)
     user.ultimo_acceso = datetime.now(timezone.utc).replace(tzinfo=None)
-    db.add(LogAcceso(
-        usuario_id=user.id,
+    await registrar_acceso(
+        db,
         username=user.username,
         accion="login",
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        exitoso=True
-    ))
+        exitoso=True,
+        usuario_id=user.id,
+        request=request,
+        detalles={"rol": norm_role},
+    )
     await db.commit()
 
     token_data = {"sub": user.username, "role": norm_role, "rol": norm_role, "user_id": user.id, "id": user.id}
@@ -144,13 +167,13 @@ async def logout(
     current_user: Usuario = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    db.add(LogAcceso(
-        usuario_id=current_user.id,
+    await registrar_acceso(
+        db,
         username=current_user.username,
         accion="logout",
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent"),
-        exitoso=True
-    ))
+        exitoso=True,
+        usuario_id=current_user.id,
+        request=request,
+    )
     await db.commit()
     return {"message": "Sesión cerrada correctamente"}

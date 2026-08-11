@@ -7,9 +7,10 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, TipoServicio, ItvBus, BusEmpresa, Eot, Auditoria
+from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, TipoServicio, ItvBus, BusEmpresa, Eot
 from app.schemas import BusBajaIn, BusBajaOut, BusCreate, BusUpdate, BusOut, TipoServicioOut
 from app.services.bus_baja import CAUSALES_BAJA, aplicar_baja_buses
+from app.services.sistema_logs import registrar_auditoria
 
 router = APIRouter(prefix="/buses", tags=["Buses"])
 
@@ -229,14 +230,15 @@ async def crear_bus(
     db.add(bus)
     await db.flush()
 
-    # Auditoría
-    db.add(Auditoria(
-        tabla_afectada="buses",
-        id_registro=bus.id_bus,
-        accion="INSERT",
+    await registrar_auditoria(
+        db,
+        accion="insert",
+        tabla="buses",
+        usuario=user,
+        registro_id=bus.id_bus,
         datos_nuevos=body.model_dump(mode="json"),
-        usuario=user.username
-    ))
+        detalles=f"Alta de bus RUA={getattr(bus, 'rua', None)}",
+    )
     await db.commit()
     await db.refresh(bus)
     return await obtener_bus(bus.id_bus, db)
@@ -264,14 +266,16 @@ async def actualizar_bus(
     for k, v in update_data.items():
         setattr(bus, k, v)
 
-    db.add(Auditoria(
-        tabla_afectada="buses",
-        id_registro=id_bus,
-        accion="UPDATE",
+    await registrar_auditoria(
+        db,
+        accion="update",
+        tabla="buses",
+        usuario=user,
+        registro_id=id_bus,
         datos_anteriores=old_data,
         datos_nuevos=update_data,
-        usuario=user.username
-    ))
+        detalles=f"Actualización de bus id={id_bus}",
+    )
     await db.commit()
     return await obtener_bus(id_bus, db)
 
@@ -351,13 +355,15 @@ async def eliminar_bus(
     if not bus:
         raise HTTPException(status_code=404, detail="Bus no encontrado")
 
-    db.add(Auditoria(
-        tabla_afectada="buses",
-        id_registro=id_bus,
-        accion="DELETE",
+    await registrar_auditoria(
+        db,
+        accion="delete",
+        tabla="buses",
+        usuario=user,
+        registro_id=id_bus,
         datos_anteriores={"rua": bus.rua, "chassis": bus.numero_chassis},
-        usuario=user.username
-    ))
+        detalles=f"Eliminación de bus RUA={bus.rua}",
+    )
     await db.delete(bus)
     await db.commit()
 

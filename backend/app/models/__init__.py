@@ -122,6 +122,27 @@ class LogAcceso(Base):
     fecha = Column(DateTime, default=func.now())
     detalles = Column(JSONB)
     exitoso = Column(Boolean, default=True)
+    sistema_id = Column(Integer, ForeignKey("sistema.sistemas.id"), nullable=True)
+
+
+class LogAuditoriaSistema(Base):
+    """Auditoría central compartida (schema sistema). SIGPA = sistema_id 5."""
+    __tablename__ = "logs_auditoria"
+    __table_args__ = {"schema": "sistema"}
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("sistema.usuarios.id"), nullable=True)
+    username = Column(String(100), nullable=False)
+    accion = Column(String(50), nullable=False)
+    tabla = Column(String(100), nullable=False)
+    registro_id = Column(Integer, nullable=True)
+    datos_anteriores = Column(JSONB)
+    datos_nuevos = Column(JSONB)
+    ip_address = Column(String(45))
+    user_agent = Column(Text)
+    fecha = Column(DateTime, default=func.now())
+    detalles = Column(Text)
+    sistema_id = Column(Integer, ForeignKey("sistema.sistemas.id"), nullable=True)
 
 
 class Mensaje(Base):

@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_roles, hash_password, normalize_role, SISTEMA_ID_PARQUE
 from app.models import Usuario, UsuarioSistemaRol, Rol
 from app.schemas import UsuarioCreate, UsuarioUpdate, UsuarioOut
+from app.services.sistema_logs import registrar_auditoria
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
 
@@ -165,6 +166,20 @@ async def crear_usuario(
         activo=True
     )
     db.add(hab)
+    await registrar_auditoria(
+        db,
+        accion="insert",
+        tabla="usuarios",
+        usuario=admin,
+        registro_id=usuario.id,
+        datos_nuevos={
+            "username": usuario.username,
+            "email": usuario.email,
+            "rol": user_in.rol,
+            "sistema_id": SISTEMA_ID_PARQUE,
+        },
+        detalles=f"Alta de usuario {usuario.username} en SIGPA",
+    )
     await db.commit()
 
     # Recargar con relaciones
@@ -224,6 +239,15 @@ async def actualizar_usuario(
             )
             db.add(new_hab)
 
+    await registrar_auditoria(
+        db,
+        accion="update",
+        tabla="usuarios",
+        usuario=admin,
+        registro_id=id_usuario,
+        datos_nuevos=user_in.model_dump(exclude_unset=True, exclude={"password"}),
+        detalles=f"Actualización de usuario {usuario.username}",
+    )
     await db.commit()
 
     res_final = await db.execute(

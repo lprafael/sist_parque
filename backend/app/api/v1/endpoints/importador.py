@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.security import require_roles
 from app.services.itv_excel import apply_import, build_preview, sincronizar_estado_desde_excel
 from app.services.empresa_excel_sync import apply_empresa_sync, build_empresa_sync_preview
+from app.services.sistema_logs import registrar_auditoria
 
 router = APIRouter(prefix="/importador", tags=["Importador"])
 
@@ -125,6 +126,23 @@ async def aplicar_excel(
             detail=f"Error al aplicar la importación: {exc}",
         ) from exc
 
+    await registrar_auditoria(
+        db,
+        accion="import",
+        tabla="buses",
+        usuario=user,
+        datos_nuevos={
+            "filename": file.filename,
+            "buses_creados": result.buses_creados,
+            "buses_actualizados": result.buses_actualizados,
+            "buses_baja": result.buses_baja,
+            "itv_insertados": result.itv_insertados,
+            "seguros_insertados": result.seguros_insertados,
+        },
+        detalles=f"Importación ITV aplicada: {file.filename}",
+    )
+    await db.commit()
+
     return {
         "status": "applied",
         "filename": file.filename,
@@ -153,7 +171,7 @@ async def sincronizar_estado_excel(
     file: UploadFile = File(...),
     inactivar_fuera: str = Form("true"),
     db: AsyncSession = Depends(get_db),
-    _user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
+    user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
 ):
     """
     Recuperación: alinea ACTIVO/INACTIVO/BAJA según hojas General y BAJAS.
@@ -173,6 +191,21 @@ async def sincronizar_estado_excel(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al sincronizar estados: {exc}",
         ) from exc
+
+    await registrar_auditoria(
+        db,
+        accion="import",
+        tabla="buses",
+        usuario=user,
+        datos_nuevos={
+            "filename": file.filename,
+            "buses_activados": result.buses_activados,
+            "buses_inactivados": result.buses_inactivados,
+            "buses_baja": result.buses_baja,
+        },
+        detalles=f"Sincronización de estados desde {file.filename}",
+    )
+    await db.commit()
 
     return {
         "status": "estado_sincronizado",
@@ -256,6 +289,21 @@ async def sincronizar_empresas_excel(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al sincronizar empresas: {exc}",
         ) from exc
+
+    await registrar_auditoria(
+        db,
+        accion="import",
+        tabla="bus_empresa",
+        usuario=user,
+        datos_nuevos={
+            "filename": file.filename,
+            "transferencias": result.transferencias,
+            "altas": result.altas,
+            "sin_cambio": result.sin_cambio,
+        },
+        detalles=f"Sincronización de empresas desde {file.filename}",
+    )
+    await db.commit()
 
     return {
         "status": "empresas_sincronizadas",

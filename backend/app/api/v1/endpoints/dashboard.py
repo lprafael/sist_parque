@@ -97,6 +97,7 @@ async def obtener_kpis(
         itv_vigente=itv_vigente,
         itv_por_vencer=itv_por_vencer,
         itv_vencido=itv_vencido,
+        itv_sin_vigente=itv_sin_fecha,
         seguros_pasajeros_vigentes=seg_pas_vig,
         seguros_pasajeros_por_vencer=seg_pas_por,
         seguros_pasajeros_vencidos=seg_pas_ven,

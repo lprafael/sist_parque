@@ -435,6 +435,14 @@ a:hover { color: var(--brand-300); }
   line-height: 1.25;
 }
 
+.kpi-hint {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  margin-top: 3px;
+  line-height: 1.2;
+  font-weight: 500;
+}
+
 /* Dashboard chart grids */
 .dashboard-charts-row,
 .dashboard-bottom-row {

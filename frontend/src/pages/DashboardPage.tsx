@@ -8,13 +8,14 @@ import {
 } from 'recharts'
 
 
-function KpiCard({ value, label, icon, color, to, action }: {
+function KpiCard({ value, label, icon, color, to, action, hint }: {
   value: number | string
   label: string
   icon: string
   color: string
   to?: string
   action?: React.ReactNode
+  hint?: string
 }) {
   const inner = (
     <>
@@ -24,6 +25,7 @@ function KpiCard({ value, label, icon, color, to, action }: {
           <div>
             <div className="kpi-value">{value}</div>
             <div className="kpi-label">{label}</div>
+            {hint ? <div className="kpi-hint">{hint}</div> : null}
           </div>
           {action}
         </div>
@@ -173,6 +175,11 @@ export default function DashboardPage() {
           icon="❌"
           color="red"
           to="/buses?estado_itv=VENCIDO"
+          hint={
+            (kpis?.itv_sin_vigente ?? 0) > 0
+              ? `${kpis.itv_sin_vigente} sin ITV vigente`
+              : undefined
+          }
         />
         <KpiCard
           value={kpis?.seguros_pasajeros_vigentes ?? 0}

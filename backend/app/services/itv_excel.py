@@ -97,11 +97,22 @@ def parse_date(val: Any) -> Optional[date]:
         val = val.strip()
         if val in ("", "00/00/00", "N/A", "N/D", "-", "None", "null"):
             return None
-        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%Y-%m-%d %H:%M:%S"):
-            try:
-                return datetime.strptime(val[:19], fmt).date()
-            except ValueError:
-                continue
+        # Typo frecuente en planilla: 08/121/26 → 08/12/26
+        val = re.sub(r"/121/", "/12/", val)
+        for fmt in (
+            "%Y-%m-%d",
+            "%d/%m/%Y",
+            "%d-%m-%Y",
+            "%Y/%m/%d",
+            "%Y-%m-%d %H:%M:%S",
+            "%d/%m/%y",
+            "%d-%m-%y",
+        ):
+            for candidate in (val, val[:19], val[:10]):
+                try:
+                    return datetime.strptime(candidate, fmt).date()
+                except ValueError:
+                    continue
     return None
 
 

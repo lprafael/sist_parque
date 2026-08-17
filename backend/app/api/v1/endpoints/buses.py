@@ -16,8 +16,9 @@ router = APIRouter(prefix="/buses", tags=["Buses"])
 
 
 def calcular_estado_itv(vencimiento: Optional[date]) -> str:
+    # Sin fecha = VENCIDA en la planilla (00/00/00), no "sin ITV".
     if not vencimiento:
-        return "SIN_ITV"
+        return "VENCIDO"
     today = date.today()
     diff = (vencimiento - today).days
     if diff < 0:

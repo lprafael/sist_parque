@@ -15,7 +15,7 @@ router = APIRouter(prefix="/itv", tags=["ITV - Inspección Técnica"])
 
 def estado_itv(venc: Optional[date]) -> tuple[str, Optional[int]]:
     if not venc:
-        return "SIN_ITV", None
+        return "VENCIDO", None
     diff = (venc - date.today()).days
     if diff < 0:
         estado = "VENCIDO"

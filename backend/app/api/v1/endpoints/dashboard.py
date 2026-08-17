@@ -27,12 +27,22 @@ async def obtener_kpis(
 
 
 
-    # ITV — toma la ITV vigente de cada bus
+    # ITV — vigente de cada bus. Vencida = fecha < hoy, o bus ACTIVO sin ITV vigente
+    # (la planilla marca VENCIDA con 00/00/00 / sin fecha).
     itv_vigente    = (await db.execute(select(func.count()).select_from(ItvBus).where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento > en_30)))).scalar()
     itv_por_vencer = (await db.execute(select(func.count()).select_from(ItvBus).where(
         and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento >= hoy, ItvBus.fecha_vencimiento <= en_30)
     ))).scalar()
-    itv_vencido    = (await db.execute(select(func.count()).select_from(ItvBus).where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento < hoy)))).scalar()
+    itv_vencido_fecha = (await db.execute(select(func.count()).select_from(ItvBus).where(and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento < hoy)))).scalar() or 0
+    itv_sin_fecha = (await db.execute(
+        select(func.count()).select_from(Bus).where(
+            and_(
+                Bus.estado_bus == "ACTIVO",
+                ~Bus.id_bus.in_(select(ItvBus.id_bus).where(ItvBus.es_vigente == True)),
+            )
+        )
+    )).scalar() or 0
+    itv_vencido = itv_vencido_fecha + itv_sin_fecha
 
     # Seguros — separados por tipo (PASAJEROS / TERCEROS).
     # Solo la póliza con seguro_vigente de buses ACTIVO (histórico excluido).

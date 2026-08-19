@@ -39,7 +39,8 @@ async def listar_buses(
     estado_itv: Optional[str] = None,
     id_marca: Optional[int] = None,
     empresa: Optional[str] = None,
-    numero_orden: Optional[int] = None,
+    numero_orden: Optional[str] = None,
+    orden_modo: Optional[str] = Query(None, regex="^(igual|contiene)$"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
@@ -71,8 +72,14 @@ async def listar_buses(
             filters.append(Bus.estado_bus == est)
     if id_marca:
         filters.append(Bus.id_marca == id_marca)
-    if numero_orden is not None:
-        filters.append(Bus.numero_orden == numero_orden)
+    if numero_orden is not None and numero_orden.strip():
+        if orden_modo == "contiene":
+            filters.append(Bus.numero_orden.cast(String).like(f"%{numero_orden.strip()}%"))
+        else:
+            try:
+                filters.append(Bus.numero_orden == int(numero_orden.strip()))
+            except ValueError:
+                pass
     if empresa:
         subq = (
             select(BusEmpresa.id_bus)

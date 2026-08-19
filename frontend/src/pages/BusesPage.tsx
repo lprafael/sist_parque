@@ -38,10 +38,12 @@ export default function BusesPage() {
   const [estadoItv, setEstadoItv]     = useState(estadoItvParam)
   const [empresa, setEmpresa]         = useState(empresaParam)
 
-  // Autocomplete número de orden
+  // Filtro número de orden
   const [ordenInput, setOrdenInput]         = useState('')
   const [ordenSelected, setOrdenSelected]   = useState<number | null>(null)
   const [ordenOpen, setOrdenOpen]           = useState(false)
+  const [ordenModo, setOrdenModo]           = useState<'igual' | 'contiene'>('contiene')
+  const [ordenFiltro, setOrdenFiltro]       = useState('')
   const ordenRef = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [busToEdit, setBusToEdit]     = useState<any>(null)
@@ -103,14 +105,14 @@ export default function BusesPage() {
   }, [])
 
   const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total: number } }>({
-    queryKey: ['buses', page, search, estadoBus, estadoItv, empresa, ordenSelected],
+    queryKey: ['buses', page, search, estadoBus, estadoItv, empresa, ordenFiltro, ordenModo],
     queryFn: () => busesApi.listar({
       page, page_size: PAGE_SIZE,
       ...(search        && { search }),
       ...(estadoBus     && { estado_bus: estadoBus }),
       ...(estadoItv     && { estado_itv: estadoItv }),
       ...(empresa       && { empresa }),
-      ...(ordenSelected !== null && { numero_orden: ordenSelected }),
+      ...(ordenFiltro   && { numero_orden: ordenFiltro, orden_modo: ordenModo }),
     }),
   })
 
@@ -220,9 +222,25 @@ export default function BusesPage() {
             />
           </div>
 
-          {/* Autocomplete Número de Orden */}
+          {/* Filtro Número de Orden: modo + input con autocomplete */}
+          <select
+            className="form-control"
+            style={{ width: 110, fontSize: '0.78rem' }}
+            value={ordenModo}
+            onChange={e => {
+              setOrdenModo(e.target.value as 'igual' | 'contiene')
+              if (ordenFiltro) {
+                setPage(1)
+              }
+            }}
+            title="Modo de búsqueda del Nº Orden"
+          >
+            <option value="contiene">Contiene</option>
+            <option value="igual">Es igual</option>
+          </select>
+
           <div ref={ordenRef} style={{ position: 'relative' }}>
-            <div className="search-bar" style={{ minWidth: 170 }}>
+            <div className="search-bar" style={{ minWidth: 150 }}>
               <Hash size={14} className="icon" />
               <input
                 placeholder="Nº Orden..."
@@ -230,25 +248,38 @@ export default function BusesPage() {
                 onChange={e => {
                   const v = e.target.value
                   setOrdenInput(v)
-                  if (ordenSelected !== null) setOrdenSelected(null)
+                  if (ordenSelected !== null) { setOrdenSelected(null) }
                   setOrdenOpen(true)
-                  setPage(1)
                 }}
                 onFocus={() => setOrdenOpen(true)}
                 onKeyDown={e => {
                   if (e.key === 'Escape') { setOrdenOpen(false) }
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    const val = ordenSelected !== null ? String(ordenSelected) : ordenInput.trim()
+                    setOrdenFiltro(val)
+                    setOrdenOpen(false)
+                    setPage(1)
+                  }
                   if (e.key === 'Backspace' && ordenSelected !== null) {
                     setOrdenSelected(null)
                     setOrdenInput('')
+                    setOrdenFiltro('')
                     setPage(1)
                   }
                 }}
                 aria-label="Filtrar por número de orden"
               />
-              {(ordenSelected !== null || ordenInput) && (
+              {(ordenSelected !== null || ordenInput || ordenFiltro) && (
                 <button
                   type="button"
-                  onClick={() => { setOrdenSelected(null); setOrdenInput(''); setOrdenOpen(false); setPage(1) }}
+                  onClick={() => {
+                    setOrdenSelected(null)
+                    setOrdenInput('')
+                    setOrdenFiltro('')
+                    setOrdenOpen(false)
+                    setPage(1)
+                  }}
                   style={{ background: 'none', border: 'none', padding: '0 4px', cursor: 'pointer',
                     color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}
                   title="Limpiar filtro"
@@ -261,7 +292,7 @@ export default function BusesPage() {
               <div style={{
                 position: 'absolute', top: '100%', left: 0, zIndex: 100,
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 8, marginTop: 4, minWidth: 200, maxHeight: 260,
+                borderRadius: 8, marginTop: 4, minWidth: 220, maxHeight: 260,
                 overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.35)'
               }}>
                 {ordenOpciones.map(op => (
@@ -271,6 +302,7 @@ export default function BusesPage() {
                       e.preventDefault()
                       setOrdenSelected(op.numero_orden)
                       setOrdenInput('')
+                      setOrdenFiltro(String(op.numero_orden))
                       setOrdenOpen(false)
                       setPage(1)
                     }}

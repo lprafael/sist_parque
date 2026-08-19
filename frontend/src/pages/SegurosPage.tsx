@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { segurosApi } from '../api'
 import { Search, RefreshCw } from 'lucide-react'
 import SeguroQuickForm from '../components/seguros/SeguroQuickForm'
+import { useRol } from '../hooks/useRol'
 
 export default function SegurosPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -31,6 +32,7 @@ export default function SegurosPage() {
 
   const items = data?.data?.items ?? []
   const total = data?.data?.total ?? items.length
+  const { puedeEditar } = useRol()
 
   return (
     <div>
@@ -46,7 +48,7 @@ export default function SegurosPage() {
         </button>
       </div>
 
-      <SeguroQuickForm onSuccess={() => { setPage(1); void refetch() }} />
+      {puedeEditar && <SeguroQuickForm onSuccess={() => { setPage(1); void refetch() }} />}
 
       <div className="card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>

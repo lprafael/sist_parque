@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { dashboardApi, alertasApi } from '../api'
 import { Trash2 } from 'lucide-react'
+import { useRol } from '../hooks/useRol'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line
@@ -68,6 +69,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 }
 
 export default function DashboardPage() {
+  const { puedeEditar } = useRol()
   const qc = useQueryClient()
 
   const { data: kpisResp, isLoading: kLoading } = useQuery({
@@ -215,7 +217,7 @@ export default function DashboardPage() {
           icon="🔔"
           color="amber"
           to="/alertas?estado=PENDIENTE"
-          action={
+          action={puedeEditar ? (
             <button
               onClick={(e) => {
                 e.preventDefault()
@@ -239,7 +241,7 @@ export default function DashboardPage() {
             >
               <Trash2 size={12} /> Borrar
             </button>
-          }
+          ) : undefined}
         />
       </div>
 

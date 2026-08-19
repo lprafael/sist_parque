@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { busesApi, empresasApi, itvApi } from '../api'
-import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban } from 'lucide-react'
+import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban, Hash } from 'lucide-react'
+import { useRol } from '../hooks/useRol'
 import BusModal from '../components/buses/BusModal'
 import BajaModal from '../components/buses/BajaModal'
 import ItvHistoryModal from '../components/itv/ItvHistoryModal'
@@ -25,6 +26,7 @@ function diasLabel(venc: string | null) {
 }
 
 export default function BusesPage() {
+  const { puedeEditar } = useRol()
   const [searchParams, setSearchParams] = useSearchParams()
   const empresaParam = searchParams.get('empresa') ?? ''
   const estadoBusParam = searchParams.get('estado_bus') ?? ''
@@ -35,6 +37,12 @@ export default function BusesPage() {
   const [estadoBus, setEstadoBus]     = useState(estadoBusParam)
   const [estadoItv, setEstadoItv]     = useState(estadoItvParam)
   const [empresa, setEmpresa]         = useState(empresaParam)
+
+  // Autocomplete número de orden
+  const [ordenInput, setOrdenInput]         = useState('')
+  const [ordenSelected, setOrdenSelected]   = useState<number | null>(null)
+  const [ordenOpen, setOrdenOpen]           = useState(false)
+  const ordenRef = useRef<HTMLDivElement>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [busToEdit, setBusToEdit]     = useState<any>(null)
   const [isBajaOpen, setIsBajaOpen]   = useState(false)
@@ -74,14 +82,35 @@ export default function BusesPage() {
 
   const empresasLista = empresasData?.data?.items ?? []
 
+  // Opciones autocomplete orden
+  const { data: ordenData } = useQuery<{ data: { numero_orden: number; rua: string }[] }>({
+    queryKey: ['buses-ordenes', ordenInput],
+    queryFn: () => busesApi.numerosOrden(ordenInput || undefined),
+    enabled: ordenOpen,
+    staleTime: 30_000,
+  })
+  const ordenOpciones = ordenData?.data ?? []
+
+  // Cerrar dropdown de orden al click fuera
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ordenRef.current && !ordenRef.current.contains(e.target as Node)) {
+        setOrdenOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total: number } }>({
-    queryKey: ['buses', page, search, estadoBus, estadoItv, empresa],
+    queryKey: ['buses', page, search, estadoBus, estadoItv, empresa, ordenSelected],
     queryFn: () => busesApi.listar({
       page, page_size: PAGE_SIZE,
-      ...(search    && { search }),
-      ...(estadoBus && { estado_bus: estadoBus }),
-      ...(estadoItv && { estado_itv: estadoItv }),
-      ...(empresa   && { empresa }),
+      ...(search        && { search }),
+      ...(estadoBus     && { estado_bus: estadoBus }),
+      ...(estadoItv     && { estado_itv: estadoItv }),
+      ...(empresa       && { empresa }),
+      ...(ordenSelected !== null && { numero_orden: ordenSelected }),
     }),
   })
 
@@ -162,9 +191,11 @@ export default function BusesPage() {
           <button className="btn btn-secondary btn-sm" onClick={() => refetch()}>
             <RefreshCw size={14} /> Actualizar
           </button>
-          <button className="btn btn-primary" onClick={handleOpenCreate}>
-            <Plus size={16} /> Nuevo Bus
-          </button>
+          {puedeEditar && (
+            <button className="btn btn-primary" onClick={handleOpenCreate}>
+              <Plus size={16} /> Nuevo Bus
+            </button>
+          )}
         </div>
       </div>
 
@@ -187,6 +218,79 @@ export default function BusesPage() {
               }}
               aria-label="Buscar buses por RUA o chasis"
             />
+          </div>
+
+          {/* Autocomplete Número de Orden */}
+          <div ref={ordenRef} style={{ position: 'relative' }}>
+            <div className="search-bar" style={{ minWidth: 170 }}>
+              <Hash size={14} className="icon" />
+              <input
+                placeholder="Nº Orden..."
+                value={ordenSelected !== null ? String(ordenSelected) : ordenInput}
+                onChange={e => {
+                  const v = e.target.value
+                  setOrdenInput(v)
+                  if (ordenSelected !== null) setOrdenSelected(null)
+                  setOrdenOpen(true)
+                  setPage(1)
+                }}
+                onFocus={() => setOrdenOpen(true)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') { setOrdenOpen(false) }
+                  if (e.key === 'Backspace' && ordenSelected !== null) {
+                    setOrdenSelected(null)
+                    setOrdenInput('')
+                    setPage(1)
+                  }
+                }}
+                aria-label="Filtrar por número de orden"
+              />
+              {(ordenSelected !== null || ordenInput) && (
+                <button
+                  type="button"
+                  onClick={() => { setOrdenSelected(null); setOrdenInput(''); setOrdenOpen(false); setPage(1) }}
+                  style={{ background: 'none', border: 'none', padding: '0 4px', cursor: 'pointer',
+                    color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}
+                  title="Limpiar filtro"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            {ordenOpen && ordenOpciones.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, zIndex: 100,
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 8, marginTop: 4, minWidth: 200, maxHeight: 260,
+                overflowY: 'auto', boxShadow: '0 4px 20px rgba(0,0,0,0.35)'
+              }}>
+                {ordenOpciones.map(op => (
+                  <div
+                    key={op.numero_orden}
+                    onMouseDown={e => {
+                      e.preventDefault()
+                      setOrdenSelected(op.numero_orden)
+                      setOrdenInput('')
+                      setOrdenOpen(false)
+                      setPage(1)
+                    }}
+                    style={{
+                      padding: '8px 14px', cursor: 'pointer', display: 'flex',
+                      gap: 10, alignItems: 'center', fontSize: '0.85rem',
+                      background: ordenSelected === op.numero_orden ? 'var(--bg-hover)' : 'transparent',
+                    }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                    onMouseLeave={e => (e.currentTarget.style.background =
+                      ordenSelected === op.numero_orden ? 'var(--bg-hover)' : 'transparent')}
+                  >
+                    <span style={{ fontWeight: 700, fontFamily: 'monospace', minWidth: 36 }}>
+                      {op.numero_orden}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{op.rua}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <select className="form-control" style={{ maxWidth: '240px' }}
@@ -345,14 +449,16 @@ export default function BusesPage() {
                             <Clock size={13} /> Ver hist. ITV
                           </button>
 
-                          <button
-                            className="btn btn-secondary btn-sm btn-icon"
-                            onClick={() => handleOpenEdit(bus)}
-                            title="Editar bus"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          {(bus.estado_bus || '').toUpperCase() !== 'BAJA' && (
+                          {puedeEditar && (
+                            <button
+                              className="btn btn-secondary btn-sm btn-icon"
+                              onClick={() => handleOpenEdit(bus)}
+                              title="Editar bus"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                          )}
+                          {puedeEditar && (bus.estado_bus || '').toUpperCase() !== 'BAJA' && (
                             <button
                               className="btn btn-secondary btn-sm btn-icon"
                               onClick={() => handleOpenBaja(bus)}

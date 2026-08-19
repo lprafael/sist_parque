@@ -41,6 +41,8 @@ export const busesApi = {
   tiposCarroceria: () => api.get('/buses/catalogo/tipos-carroceria'),
   marcasCarroceria: () => api.get('/buses/catalogo/marcas-carroceria'),
   tiposServicio: () => api.get('/buses/catalogo/tipos-servicio'),
+  numerosOrden: (q?: string) =>
+    api.get('/buses/catalogo/numeros-orden', { params: q ? { q } : undefined }),
 }
 
 // ── Empresas (EOT - read-only) ────────────────────

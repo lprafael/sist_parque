@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, Play, Building2 } from 'lucide-react'
 import { importadorApi } from '../api'
 import { formatApiError } from '../api/client'
+import { useRol } from '../hooks/useRol'
 
 type PreviewData = {
   status: string
@@ -78,6 +79,7 @@ type EmpresaApplyData = {
 }
 
 export default function ImportadorPage() {
+  const { puedeEditar } = useRol()
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
@@ -225,6 +227,26 @@ export default function ImportadorPage() {
     } finally {
       setApplying(false)
     }
+  }
+
+  if (!puedeEditar) {
+    return (
+      <div>
+        <div className="page-header">
+          <div>
+            <h1 className="page-header-title">Importador Masivo (Excel)</h1>
+          </div>
+        </div>
+        <div className="card" style={{ padding: '3rem', textAlign: 'center' }}>
+          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔒</div>
+          <h3 style={{ marginBottom: '0.5rem' }}>Acceso restringido</h3>
+          <p style={{ color: 'var(--text-muted)' }}>
+            Tu rol de <strong>Visualizador</strong> no tiene permisos para importar datos.
+            Contactá a un Administrador o Supervisor.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

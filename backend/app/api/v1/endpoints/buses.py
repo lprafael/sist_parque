@@ -39,6 +39,7 @@ async def listar_buses(
     estado_itv: Optional[str] = None,
     id_marca: Optional[int] = None,
     empresa: Optional[str] = None,
+    numero_orden: Optional[int] = None,
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
@@ -70,6 +71,8 @@ async def listar_buses(
             filters.append(Bus.estado_bus == est)
     if id_marca:
         filters.append(Bus.id_marca == id_marca)
+    if numero_orden is not None:
+        filters.append(Bus.numero_orden == numero_orden)
     if empresa:
         subq = (
             select(BusEmpresa.id_bus)
@@ -367,6 +370,29 @@ async def eliminar_bus(
     )
     await db.delete(bus)
     await db.commit()
+
+
+@router.get("/catalogo/numeros-orden")
+async def listar_numeros_orden(
+    q: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Devuelve pares {numero_orden, rua} para el autocomplete del filtro."""
+    stmt = (
+        select(Bus.numero_orden, Bus.rua)
+        .where(Bus.numero_orden.isnot(None))
+        .order_by(Bus.numero_orden)
+        .limit(200)
+    )
+    if q and q.strip():
+        try:
+            n = int(q.strip())
+            stmt = stmt.where(Bus.numero_orden == n)
+        except ValueError:
+            stmt = stmt.where(Bus.rua.ilike(f"%{q.strip()}%"))
+    rows = (await db.execute(stmt)).all()
+    return [{"numero_orden": r[0], "rua": r[1]} for r in rows]
 
 
 @router.get("/catalogo/marcas")

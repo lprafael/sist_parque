@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { alertasApi } from '../api'
 import { Bell, Check, EyeOff, RefreshCw, Filter } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
+import { useRol } from '../hooks/useRol'
 
 const prioridadBadge: Record<string, string> = {
   ALTA: 'badge-alta', MEDIA: 'badge-media', BAJA: 'badge-baja',
@@ -23,6 +24,7 @@ export default function AlertasPage() {
   const [prioridad, setPrioridad] = useState('')
   const [page, setPage]         = useState(1)
   const { usuario } = useAuthStore()
+  const { puedeEditar } = useRol()
   const qc = useQueryClient()
   const PAGE_SIZE = 20
 
@@ -77,14 +79,16 @@ export default function AlertasPage() {
           <p className="page-header-sub">{total} alerta(s) encontrada(s)</p>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
-          <button 
-            className="btn btn-secondary btn-sm" 
-            onClick={handleLimpiar}
-            disabled={limpiarTodas.isPending}
-            style={{ color: '#f87171', borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)' }}
-          >
-            Borrar Todas
-          </button>
+          {puedeEditar && (
+            <button 
+              className="btn btn-secondary btn-sm" 
+              onClick={handleLimpiar}
+              disabled={limpiarTodas.isPending}
+              style={{ color: '#f87171', borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.1)' }}
+            >
+              Borrar Todas
+            </button>
+          )}
           <button className="btn btn-secondary btn-sm" onClick={() => refetch()}>
             <RefreshCw size={14} /> Actualizar
           </button>
@@ -151,7 +155,7 @@ export default function AlertasPage() {
                   )}
                 </div>
               </div>
-              {al.estado_alerta === 'PENDIENTE' && (
+              {al.estado_alerta === 'PENDIENTE' && puedeEditar && (
                 <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                   <button
                     className="btn btn-success btn-sm"

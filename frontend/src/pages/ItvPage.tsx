@@ -4,8 +4,10 @@ import { itvApi } from '../api'
 import { Search, RefreshCw, Plus, Edit2, Clock } from 'lucide-react'
 import ItvModal from '../components/itv/ItvModal'
 import ItvHistoryModal from '../components/itv/ItvHistoryModal'
+import { useRol } from '../hooks/useRol'
 
 export default function ItvPage() {
+  const { puedeEditar } = useRol()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 20
@@ -42,12 +44,14 @@ export default function ItvPage() {
           <button className="btn btn-secondary btn-sm" onClick={() => refetch()}>
             <RefreshCw size={14} /> Actualizar
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => {
-            setSelectedItv(null)
-            setIsModalOpen(true)
-          }}>
-            <Plus size={14} /> Nuevo Registro
-          </button>
+          {puedeEditar && (
+            <button className="btn btn-primary btn-sm" onClick={() => {
+              setSelectedItv(null)
+              setIsModalOpen(true)
+            }}>
+              <Plus size={14} /> Nuevo Registro
+            </button>
+          )}
         </div>
       </div>
 
@@ -121,17 +125,19 @@ export default function ItvPage() {
                       </span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <button
-                        className="btn btn-sm"
-                        style={{ background: 'transparent', padding: '4px', color: 'var(--primary)' }}
-                        onClick={() => {
-                          setSelectedItv(itv)
-                          setIsModalOpen(true)
-                        }}
-                        title="Editar ITV"
-                      >
-                        <Edit2 size={16} />
-                      </button>
+                      {puedeEditar && (
+                        <button
+                          className="btn btn-sm"
+                          style={{ background: 'transparent', padding: '4px', color: 'var(--primary)' }}
+                          onClick={() => {
+                            setSelectedItv(itv)
+                            setIsModalOpen(true)
+                          }}
+                          title="Editar ITV"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      )}
                       <button
                         className="btn btn-sm"
                         style={{ background: 'transparent', padding: '4px', color: '#10b981', marginLeft: '5px' }}

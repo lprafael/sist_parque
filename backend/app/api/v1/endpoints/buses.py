@@ -2,7 +2,7 @@ from typing import Optional, List
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_, and_, text
+from sqlalchemy import select, func, or_, and_, text, String
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
@@ -386,11 +386,7 @@ async def listar_numeros_orden(
         .limit(200)
     )
     if q and q.strip():
-        try:
-            n = int(q.strip())
-            stmt = stmt.where(Bus.numero_orden == n)
-        except ValueError:
-            stmt = stmt.where(Bus.rua.ilike(f"%{q.strip()}%"))
+        stmt = stmt.where(Bus.numero_orden.cast(String).like(f"%{q.strip()}%"))
     rows = (await db.execute(stmt)).all()
     return [{"numero_orden": r[0], "rua": r[1]} for r in rows]
 

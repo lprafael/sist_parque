@@ -223,6 +223,7 @@ class Bus(Base):
     cilindrada          = Column(String(20))
     color               = Column(String(50))
     estado_bus          = Column(String(20), default="ACTIVO")
+    tiene_rampa         = Column(Boolean, nullable=False, default=False, server_default="false")
     fecha_registro      = Column(DateTime, default=func.now())
     fecha_modificacion  = Column(DateTime, default=func.now(), onupdate=func.now())
 

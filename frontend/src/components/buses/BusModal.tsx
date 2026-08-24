@@ -34,7 +34,8 @@ export default function BusModal({
     capacidad_pasajeros: '',
     combustible: 'DIESEL',
     color: '',
-    estado_bus: 'ACTIVO'
+    estado_bus: 'ACTIVO',
+    tiene_rampa: false,
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -52,7 +53,8 @@ export default function BusModal({
         capacidad_pasajeros: busToEdit.capacidad_pasajeros || '',
         combustible: busToEdit.combustible || 'DIESEL',
         color: busToEdit.color || '',
-        estado_bus: busToEdit.estado_bus || 'ACTIVO'
+        estado_bus: busToEdit.estado_bus || 'ACTIVO',
+        tiene_rampa: Boolean(busToEdit.tiene_rampa),
       })
     } else {
       setFormData({
@@ -66,7 +68,8 @@ export default function BusModal({
         capacidad_pasajeros: '',
         combustible: 'DIESEL',
         color: '',
-        estado_bus: 'ACTIVO'
+        estado_bus: 'ACTIVO',
+        tiene_rampa: false,
       })
     }
     setError('')
@@ -121,7 +124,8 @@ export default function BusModal({
       capacidad_pasajeros: formData.capacidad_pasajeros ? Number(formData.capacidad_pasajeros) : null,
       combustible: formData.combustible,
       color: formData.color,
-      estado_bus: formData.estado_bus
+      estado_bus: formData.estado_bus,
+      tiene_rampa: Boolean(formData.tiene_rampa),
     }
 
     try {
@@ -305,6 +309,19 @@ export default function BusModal({
                 Para dar de baja use el botón de la lista (motivo + cierra asignación e ITV).
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="form-label" htmlFor="bus-rampa">Rampa para discapacitados</label>
+            <select
+              id="bus-rampa"
+              className="form-control"
+              value={formData.tiene_rampa ? 'si' : 'no'}
+              onChange={e => setFormData({ ...formData, tiene_rampa: e.target.value === 'si' })}
+            >
+              <option value="no">No</option>
+              <option value="si">Sí</option>
+            </select>
           </div>
 
           <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>

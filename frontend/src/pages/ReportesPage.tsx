@@ -24,6 +24,7 @@ const CAMPOS_DEFAULT = [
   { key: 'color', label: 'Color', default: false },
   { key: 'tipo_servicio', label: 'Tipo Servicio', default: false },
   { key: 'estado_bus', label: 'Estado Bus', default: true },
+  { key: 'tiene_rampa', label: 'Rampa discapacitados', default: false },
   { key: 'itv_vencimiento', label: 'ITV Vencimiento', default: true },
   { key: 'itv_estado', label: 'Estado ITV', default: true },
   { key: 'fecha_itv', label: 'Fecha ITV', default: false },

@@ -132,6 +132,7 @@ class BusBase(BaseModel):
     cilindrada: Optional[str] = None
     color: Optional[str] = None
     estado_bus: str = "ACTIVO"
+    tiene_rampa: bool = False
 
 class BusCreate(BusBase):
     pass
@@ -150,6 +151,7 @@ class BusUpdate(BaseModel):
     cilindrada: Optional[str] = None
     color: Optional[str] = None
     estado_bus: Optional[str] = None
+    tiene_rampa: Optional[bool] = None
 
 class BusBajaIn(BaseModel):
     """Baja formal del parque: estado BAJA + cierra asignación + invalida ITV."""

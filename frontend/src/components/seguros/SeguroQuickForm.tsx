@@ -125,7 +125,7 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
   }, [busesEot, form.id_eot, form.rua])
 
   const focusAt = useCallback((index: number) => {
-    const refs = [empresaRef, ruaRef, tipoRef, vencRef, inicioRef, companiaRef, polizaRef]
+    const refs = [empresaRef, ruaRef, tipoRef, inicioRef, vencRef, companiaRef, polizaRef]
     const el = refs[index]?.current
     if (!el) return
     requestAnimationFrame(() => {
@@ -263,13 +263,13 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
         focusAt(2)
         return
       }
-      if (!form.fecha_vencimiento) {
-        setError('Ingresá la fecha de vencimiento.')
+      if (!form.fecha_inicio) {
+        setError('Ingresá la fecha de inicio.')
         focusAt(3)
         return
       }
-      if (!form.fecha_inicio) {
-        setError('Ingresá la fecha de inicio.')
+      if (!form.fecha_vencimiento) {
+        setError('Ingresá la fecha de vencimiento.')
         focusAt(4)
         return
       }
@@ -601,19 +601,6 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
         </div>
 
         <div className="form-group" style={{ marginBottom: 0 }}>
-          <label className="form-label">Vencimiento *</label>
-          <input
-            ref={vencRef}
-            type="date"
-            className="form-control"
-            value={form.fecha_vencimiento}
-            onChange={(e) => set('fecha_vencimiento', e.target.value)}
-            onKeyDown={(e) => onFieldKeyDown(e, 3)}
-            disabled={loading || !form.id_eot}
-          />
-        </div>
-
-        <div className="form-group" style={{ marginBottom: 0 }}>
           <label className="form-label">Inicio *</label>
           <input
             ref={inicioRef}
@@ -621,6 +608,19 @@ export default function SeguroQuickForm({ onSuccess }: SeguroQuickFormProps) {
             className="form-control"
             value={form.fecha_inicio}
             onChange={(e) => set('fecha_inicio', e.target.value)}
+            onKeyDown={(e) => onFieldKeyDown(e, 3)}
+            disabled={loading || !form.id_eot}
+          />
+        </div>
+
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label className="form-label">Vencimiento *</label>
+          <input
+            ref={vencRef}
+            type="date"
+            className="form-control"
+            value={form.fecha_vencimiento}
+            onChange={(e) => set('fecha_vencimiento', e.target.value)}
             onKeyDown={(e) => onFieldKeyDown(e, 4)}
             disabled={loading || !form.id_eot}
           />

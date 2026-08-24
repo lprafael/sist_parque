@@ -92,6 +92,8 @@ export const segurosApi = {
   companias: () => api.get('/seguros/companias'),
   tipos: () => api.get('/seguros/tipos'),
   crearCompania: (data: unknown) => api.post('/seguros/companias', data),
+  historialBus: (id_bus: number) =>
+    api.get('/seguros', { params: { id_bus, page: 1, page_size: 100 } }),
 }
 
 // ── Alertas ───────────────────────────────────────

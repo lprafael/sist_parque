@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { busesApi, empresasApi, itvApi } from '../api'
-import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban, Hash } from 'lucide-react'
+import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban, Hash, Shield } from 'lucide-react'
 import { useRol } from '../hooks/useRol'
 import BusModal from '../components/buses/BusModal'
 import BajaModal from '../components/buses/BajaModal'
 import ItvHistoryModal from '../components/itv/ItvHistoryModal'
 import ItvModal from '../components/itv/ItvModal'
+import SeguroHistoryModal from '../components/seguros/SeguroHistoryModal'
 
 function estadoBadge(estado: string) {
   const map: Record<string, string> = {
@@ -50,8 +51,9 @@ export default function BusesPage() {
   const [isBajaOpen, setIsBajaOpen]   = useState(false)
   const [busToBaja, setBusToBaja]     = useState<any>(null)
 
-  // Modales ITV
+  // Modales ITV / Seguro
   const [isHistoryOpen, setIsHistoryOpen]                 = useState(false)
+  const [isSeguroHistoryOpen, setIsSeguroHistoryOpen]     = useState(false)
   const [selectedBusForHistory, setSelectedBusForHistory] = useState<any>(null)
   const [isItvModalOpen, setIsItvModalOpen]               = useState(false)
   const [itvToEdit, setItvToEdit]                         = useState<any>(null)
@@ -59,7 +61,7 @@ export default function BusesPage() {
 
   const PAGE_SIZE = 25
 
-  const anyModalOpen = isModalOpen || isHistoryOpen || isItvModalOpen || isBajaOpen
+  const anyModalOpen = isModalOpen || isHistoryOpen || isSeguroHistoryOpen || isItvModalOpen || isBajaOpen
 
   // Foco en el buscador al entrar y al cerrar modales
   useEffect(() => {
@@ -160,6 +162,11 @@ export default function BusesPage() {
   const handleOpenHistory = (bus: any) => {
     setSelectedBusForHistory(bus)
     setIsHistoryOpen(true)
+  }
+
+  const handleOpenSeguroHistory = (bus: any) => {
+    setSelectedBusForHistory(bus)
+    setIsSeguroHistoryOpen(true)
   }
 
   const handleOpenEditItv = async (busId: number) => {
@@ -462,7 +469,7 @@ export default function BusesPage() {
                         </span>
                       </td>
                       <td style={{ whiteSpace: 'nowrap' }}>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <button
                             className="btn btn-secondary btn-sm"
                             style={{
@@ -479,6 +486,23 @@ export default function BusesPage() {
                             title="Ver histórico de ITV de este bus"
                           >
                             <Clock size={13} /> Ver hist. ITV
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '0.75rem',
+                              padding: '4px 8px',
+                              color: '#6ee7b7',
+                              borderColor: 'rgba(16,185,129,0.35)',
+                              background: 'rgba(16,185,129,0.08)'
+                            }}
+                            onClick={() => handleOpenSeguroHistory(bus)}
+                            title="Ver histórico de seguro de este bus"
+                          >
+                            <Shield size={13} /> Ver hist. Seguro
                           </button>
 
                           {puedeEditar && (
@@ -550,6 +574,13 @@ export default function BusesPage() {
         busId={selectedBusForHistory?.id_bus ?? 0}
         busRua={selectedBusForHistory?.rua}
         onEditItv={handleOpenEditItv}
+      />
+
+      <SeguroHistoryModal
+        isOpen={isSeguroHistoryOpen}
+        onClose={() => setIsSeguroHistoryOpen(false)}
+        busId={selectedBusForHistory?.id_bus ?? 0}
+        busRua={selectedBusForHistory?.rua}
       />
 
       <ItvModal

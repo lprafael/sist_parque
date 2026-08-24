@@ -404,32 +404,54 @@ a:hover { color: var(--brand-300); }
 .kpi-card:hover { border-color: rgba(63,81,181,0.3); transform: translateY(-2px); box-shadow: var(--shadow-brand); }
 
 .kpi-split-card {
-  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
   gap: 0;
-  padding: 0;
-  overflow: hidden;
+  padding: 6px 8px;
   align-items: stretch;
 }
 
 .kpi-split-cell {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 18px;
+  flex-direction: column;
+  justify-content: center;
   min-width: 0;
+  padding: 4px 8px;
   text-decoration: none;
   color: inherit;
+  border-radius: var(--radius-sm, 6px);
   transition: background var(--transition);
 }
 
-.kpi-split-cell:hover {
-  background: rgba(63, 81, 181, 0.06);
+.kpi-split-cell:nth-child(odd) {
+  border-right: 1px solid var(--border);
 }
 
-.kpi-split-cell-border {
-  border-right: 1px solid var(--border);
+.kpi-split-cell:nth-child(-n + 2) {
+  border-bottom: 1px solid var(--border);
+}
+
+.kpi-split-cell:hover {
+  background: rgba(63, 81, 181, 0.08);
+}
+
+.kpi-split-value {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--text-primary);
+}
+
+.kpi-split-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .kpi-icon {
@@ -1534,17 +1556,6 @@ select.form-control option { background: var(--bg-input); }
 
 @media (max-width: 900px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi-split-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .kpi-split-cell-border {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-  }
-  .kpi-split-card > :nth-child(odd) {
-    border-right: 1px solid var(--border);
-  }
-  .kpi-split-card > :nth-last-child(-n + 2) {
-    border-bottom: none;
-  }
   .dashboard-charts-row,
   .dashboard-bottom-row {
     grid-template-columns: 1fr;

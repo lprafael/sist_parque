@@ -56,31 +56,27 @@ function KpiCard({ value, label, icon, color, to, action, hint }: {
 function ParqueSplitCard({
   items,
 }: {
-  items: { value: number; label: string; icon: string; color: string; to?: string }[]
+  items: { value: number; label: string; to?: string }[]
 }) {
   return (
     <div className="kpi-card kpi-split-card">
-      {items.map((item, i) => {
-        const cell = (
+      {items.map((item) => {
+        const inner = (
           <>
-            <div className={`kpi-icon ${item.color}`}>{item.icon}</div>
-            <div style={{ minWidth: 0 }}>
-              <div className="kpi-value">{item.value}</div>
-              <div className="kpi-label">{item.label}</div>
-            </div>
+            <div className="kpi-split-value">{item.value}</div>
+            <div className="kpi-split-label">{item.label}</div>
           </>
         )
-        const className = `kpi-split-cell${i < items.length - 1 ? ' kpi-split-cell-border' : ''}`
         if (item.to) {
           return (
-            <Link key={item.label} to={item.to} className={className}>
-              {cell}
+            <Link key={item.label} to={item.to} className="kpi-split-cell">
+              {inner}
             </Link>
           )
         }
         return (
-          <div key={item.label} className={className}>
-            {cell}
+          <div key={item.label} className="kpi-split-cell">
+            {inner}
           </div>
         )
       })}
@@ -192,6 +188,36 @@ export default function DashboardPage() {
           color="green"
           to="/buses?estado_bus=ACTIVO"
         />
+        <ParqueSplitCard
+          items={[
+            {
+              value: kpis?.buses_convencional ?? 0,
+              label: 'Convencional',
+              to: kpis?.id_tipo_convencional
+                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_convencional}`
+                : '/buses?estado_bus=ACTIVO',
+            },
+            {
+              value: kpis?.buses_diferenciado ?? 0,
+              label: 'Diferenciado',
+              to: kpis?.id_tipo_diferenciado
+                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_diferenciado}`
+                : '/buses?estado_bus=ACTIVO',
+            },
+            {
+              value: kpis?.buses_electrico ?? 0,
+              label: 'Eléctrico',
+              to: kpis?.id_tipo_electrico
+                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_electrico}`
+                : '/buses?estado_bus=ACTIVO',
+            },
+            {
+              value: kpis?.buses_con_rampa ?? 0,
+              label: 'Con rampa',
+              to: '/buses?estado_bus=ACTIVO&tiene_rampa=true',
+            },
+          ]}
+        />
         <KpiCard
           value={kpis?.itv_vigente ?? 0}
           label="ITV Vigentes"
@@ -277,44 +303,6 @@ export default function DashboardPage() {
               <Trash2 size={12} /> Borrar
             </button>
           ) : undefined}
-        />
-        <ParqueSplitCard
-          items={[
-            {
-              value: kpis?.buses_convencional ?? 0,
-              label: 'Convencional',
-              icon: '🚌',
-              color: 'blue',
-              to: kpis?.id_tipo_convencional
-                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_convencional}`
-                : '/buses?estado_bus=ACTIVO',
-            },
-            {
-              value: kpis?.buses_diferenciado ?? 0,
-              label: 'Diferenciado',
-              icon: '🚍',
-              color: 'cyan',
-              to: kpis?.id_tipo_diferenciado
-                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_diferenciado}`
-                : '/buses?estado_bus=ACTIVO',
-            },
-            {
-              value: kpis?.buses_electrico ?? 0,
-              label: 'Eléctrico',
-              icon: '⚡',
-              color: 'green',
-              to: kpis?.id_tipo_electrico
-                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_electrico}`
-                : '/buses?estado_bus=ACTIVO',
-            },
-            {
-              value: kpis?.buses_con_rampa ?? 0,
-              label: 'Con rampa',
-              icon: '♿',
-              color: 'amber',
-              to: '/buses?estado_bus=ACTIVO&tiene_rampa=true',
-            },
-          ]}
         />
       </div>
 

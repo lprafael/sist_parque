@@ -24,7 +24,7 @@ export const dashboardApi = {
 
 // ── Buses ─────────────────────────────────────────
 export const busesApi = {
-  listar: (params?: Record<string, string | number>) =>
+  listar: (params?: Record<string, string | number | boolean>) =>
     api.get('/buses', { params }),
   obtener: (id: number) => api.get(`/buses/${id}`),
   crear: (data: unknown) => api.post('/buses', data),

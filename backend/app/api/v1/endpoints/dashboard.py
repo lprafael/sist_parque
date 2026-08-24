@@ -5,7 +5,7 @@ from sqlalchemy import select, func, and_, or_, text
 
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models import Bus, ItvBus, SeguroBus, TipoSeguro, Alerta, Eot, BusEmpresa
+from app.models import Bus, ItvBus, SeguroBus, TipoSeguro, TipoServicio, Alerta, Eot, BusEmpresa
 from app.schemas import KpiDashboard
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard & KPIs"])
@@ -89,6 +89,28 @@ async def obtener_kpis(
         and_(Eot.situacion == 1, Eot.permisionario == True)
     ))).scalar()
 
+    # Parque: tipo de servicio + rampa (solo buses ACTIVO)
+    tipo_rows = (await db.execute(
+        select(TipoServicio.id_tipo_servicio, TipoServicio.nombre, func.count(Bus.id_bus))
+        .outerjoin(Bus, and_(Bus.id_tipo_servicio == TipoServicio.id_tipo_servicio, Bus.estado_bus == "ACTIVO"))
+        .where(TipoServicio.activo == True)
+        .group_by(TipoServicio.id_tipo_servicio, TipoServicio.nombre)
+    )).all()
+
+    tipo_map: dict[str, tuple] = {}
+    for tid, nombre, cnt in tipo_rows:
+        key = (nombre or "").strip().upper()
+        tipo_map[key] = (tid, int(cnt or 0))
+
+    id_conv, buses_convencional = tipo_map.get("CONVENCIONAL", (None, 0))
+    id_dif, buses_diferenciado = tipo_map.get("DIFERENCIADO", (None, 0))
+    id_elec, buses_electrico = tipo_map.get("ELECTRICO", (None, 0))
+
+    buses_con_rampa = (await db.execute(
+        select(func.count()).select_from(Bus).where(
+            and_(Bus.estado_bus == "ACTIVO", Bus.tiene_rampa.is_(True))
+        )
+    )).scalar() or 0
 
     return KpiDashboard(
         total_buses=total_buses,
@@ -107,6 +129,13 @@ async def obtener_kpis(
         alertas_criticas=alertas_criticas,
         alertas_pendientes=alertas_pendientes,
         total_empresas=total_empresas,
+        buses_convencional=buses_convencional,
+        buses_diferenciado=buses_diferenciado,
+        buses_electrico=buses_electrico,
+        buses_con_rampa=buses_con_rampa,
+        id_tipo_convencional=id_conv,
+        id_tipo_diferenciado=id_dif,
+        id_tipo_electrico=id_elec,
     )
 
 

@@ -32,12 +32,16 @@ export default function BusesPage() {
   const empresaParam = searchParams.get('empresa') ?? ''
   const estadoBusParam = searchParams.get('estado_bus') ?? ''
   const estadoItvParam = searchParams.get('estado_itv') ?? ''
+  const tipoServicioParam = searchParams.get('id_tipo_servicio') ?? ''
+  const tieneRampaParam = searchParams.get('tiene_rampa') ?? ''
 
   const [search, setSearch]           = useState('')
   const [page, setPage]               = useState(1)
   const [estadoBus, setEstadoBus]     = useState(estadoBusParam)
   const [estadoItv, setEstadoItv]     = useState(estadoItvParam)
   const [empresa, setEmpresa]         = useState(empresaParam)
+  const [tipoServicio, setTipoServicio] = useState(tipoServicioParam)
+  const [tieneRampa, setTieneRampa]   = useState(tieneRampaParam)
 
   // Filtro número de orden
   const [ordenInput, setOrdenInput]         = useState('')
@@ -75,8 +79,10 @@ export default function BusesPage() {
     setEmpresa(empresaParam)
     setEstadoBus(estadoBusParam)
     setEstadoItv(estadoItvParam)
+    setTipoServicio(tipoServicioParam)
+    setTieneRampa(tieneRampaParam)
     setPage(1)
-  }, [empresaParam, estadoBusParam, estadoItvParam])
+  }, [empresaParam, estadoBusParam, estadoItvParam, tipoServicioParam, tieneRampaParam])
 
   // Catálogo de empresas permisionarias para el dropdown de filtro
   const { data: empresasData } = useQuery<{ data: { items: any[] } }>({
@@ -107,13 +113,17 @@ export default function BusesPage() {
   }, [])
 
   const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total: number } }>({
-    queryKey: ['buses', page, search, estadoBus, estadoItv, empresa, ordenFiltro, ordenModo],
+    queryKey: ['buses', page, search, estadoBus, estadoItv, empresa, tipoServicio, tieneRampa, ordenFiltro, ordenModo],
     queryFn: () => busesApi.listar({
       page, page_size: PAGE_SIZE,
       ...(search        && { search }),
       ...(estadoBus     && { estado_bus: estadoBus }),
       ...(estadoItv     && { estado_itv: estadoItv }),
       ...(empresa       && { empresa }),
+      ...(tipoServicio  && { id_tipo_servicio: Number(tipoServicio) }),
+      ...(tieneRampa === 'true' || tieneRampa === 'false'
+        ? { tiene_rampa: tieneRampa === 'true' }
+        : {}),
       ...(ordenFiltro   && { numero_orden: ordenFiltro, orden_modo: ordenModo }),
     }),
   })
@@ -128,14 +138,24 @@ export default function BusesPage() {
   const total = data?.data?.total ?? 0
   const totalPages = Math.ceil(total / PAGE_SIZE)
 
-  const syncParams = (next: { empresa?: string; estado_bus?: string; estado_itv?: string }) => {
+  const syncParams = (next: {
+    empresa?: string
+    estado_bus?: string
+    estado_itv?: string
+    id_tipo_servicio?: string
+    tiene_rampa?: string
+  }) => {
     const p = new URLSearchParams()
     const emp = next.empresa !== undefined ? next.empresa : empresa
     const eb = next.estado_bus !== undefined ? next.estado_bus : estadoBus
     const ei = next.estado_itv !== undefined ? next.estado_itv : estadoItv
+    const ts = next.id_tipo_servicio !== undefined ? next.id_tipo_servicio : tipoServicio
+    const tr = next.tiene_rampa !== undefined ? next.tiene_rampa : tieneRampa
     if (emp) p.set('empresa', emp)
     if (eb) p.set('estado_bus', eb)
     if (ei) p.set('estado_itv', ei)
+    if (ts) p.set('id_tipo_servicio', ts)
+    if (tr === 'true' || tr === 'false') p.set('tiene_rampa', tr)
     setSearchParams(p)
   }
 
@@ -368,6 +388,20 @@ export default function BusesPage() {
             <option value="CRITICO">Crítico</option>
             <option value="VENCIDO">Vencido</option>
             <option value="SIN_ITV">Sin ITV</option>
+          </select>
+          <select className="form-control" style={{ width: '190px' }}
+            value={tipoServicio} onChange={e => {
+              const val = e.target.value
+              setTipoServicio(val)
+              setPage(1)
+              syncParams({ id_tipo_servicio: val })
+            }}>
+            <option value="">Todos los servicios</option>
+            {(tiposServicioData?.data ?? []).map((t: any) => (
+              <option key={t.id_tipo_servicio} value={t.id_tipo_servicio}>
+                {t.nombre}
+              </option>
+            ))}
           </select>
 
           {empresa && (

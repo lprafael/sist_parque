@@ -403,6 +403,35 @@ a:hover { color: var(--brand-300); }
 .kpi-card:hover::before { opacity: 1; }
 .kpi-card:hover { border-color: rgba(63,81,181,0.3); transform: translateY(-2px); box-shadow: var(--shadow-brand); }
 
+.kpi-split-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  align-items: stretch;
+}
+
+.kpi-split-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--transition);
+}
+
+.kpi-split-cell:hover {
+  background: rgba(63, 81, 181, 0.06);
+}
+
+.kpi-split-cell-border {
+  border-right: 1px solid var(--border);
+}
+
 .kpi-icon {
   width: 48px; height: 48px;
   border-radius: var(--radius-md);
@@ -1505,6 +1534,17 @@ select.form-control option { background: var(--bg-input); }
 
 @media (max-width: 900px) {
   .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-split-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-split-cell-border {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+  .kpi-split-card > :nth-child(odd) {
+    border-right: 1px solid var(--border);
+  }
+  .kpi-split-card > :nth-last-child(-n + 2) {
+    border-bottom: none;
+  }
   .dashboard-charts-row,
   .dashboard-bottom-row {
     grid-template-columns: 1fr;

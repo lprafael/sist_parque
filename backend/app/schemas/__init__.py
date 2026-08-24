@@ -447,6 +447,14 @@ class KpiDashboard(BaseModel):
     alertas_criticas: int
     alertas_pendientes: int
     total_empresas: int
+    # Parque por tipo de servicio / accesibilidad (buses ACTIVO)
+    buses_convencional: int = 0
+    buses_diferenciado: int = 0
+    buses_electrico: int = 0
+    buses_con_rampa: int = 0
+    id_tipo_convencional: Optional[int] = None
+    id_tipo_diferenciado: Optional[int] = None
+    id_tipo_electrico: Optional[int] = None
 
 
 # ============================================================

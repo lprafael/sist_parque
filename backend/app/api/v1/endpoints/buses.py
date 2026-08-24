@@ -38,6 +38,8 @@ async def listar_buses(
     estado_bus: Optional[str] = None,
     estado_itv: Optional[str] = None,
     id_marca: Optional[int] = None,
+    id_tipo_servicio: Optional[int] = None,
+    tiene_rampa: Optional[bool] = None,
     empresa: Optional[str] = None,
     numero_orden: Optional[str] = None,
     orden_modo: Optional[str] = Query(None, regex="^(igual|contiene)$"),
@@ -72,6 +74,10 @@ async def listar_buses(
             filters.append(Bus.estado_bus == est)
     if id_marca:
         filters.append(Bus.id_marca == id_marca)
+    if id_tipo_servicio:
+        filters.append(Bus.id_tipo_servicio == id_tipo_servicio)
+    if tiene_rampa is not None:
+        filters.append(Bus.tiene_rampa.is_(tiene_rampa))
     if numero_orden is not None and numero_orden.strip():
         if orden_modo == "contiene":
             filters.append(Bus.numero_orden.cast(String).like(f"%{numero_orden.strip()}%"))

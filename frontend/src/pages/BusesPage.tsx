@@ -122,6 +122,7 @@ export default function BusesPage() {
   const { data: marcasData } = useQuery<{ data: any[] }>({ queryKey: ['marcas'], queryFn: busesApi.marcas })
   const { data: tiposData } = useQuery<{ data: any[] }>({ queryKey: ['tipos-carroceria'], queryFn: busesApi.tiposCarroceria })
   const { data: marcasCarrData } = useQuery<{ data: any[] }>({ queryKey: ['marcas-carroceria'], queryFn: busesApi.marcasCarroceria })
+  const { data: tiposServicioData } = useQuery<{ data: any[] }>({ queryKey: ['tipos-servicio'], queryFn: busesApi.tiposServicio })
 
   const buses = data?.data?.items ?? []
   const total = data?.data?.total ?? 0
@@ -559,6 +560,7 @@ export default function BusesPage() {
         marcas={marcasData?.data ?? []}
         tiposCarroceria={tiposData?.data ?? []}
         marcasCarroceria={marcasCarrData?.data ?? []}
+        tiposServicio={tiposServicioData?.data ?? []}
       />
 
       <BajaModal

@@ -11,6 +11,7 @@ interface BusModalProps {
   marcas: any[]
   tiposCarroceria: any[]
   marcasCarroceria: any[]
+  tiposServicio: any[]
 }
 
 export default function BusModal({
@@ -20,7 +21,8 @@ export default function BusModal({
   busToEdit,
   marcas,
   tiposCarroceria,
-  marcasCarroceria
+  marcasCarroceria,
+  tiposServicio
 }: BusModalProps) {
   const firstFieldRef = useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState({
@@ -36,6 +38,7 @@ export default function BusModal({
     color: '',
     estado_bus: 'ACTIVO',
     tiene_rampa: false,
+    id_tipo_servicio: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -55,8 +58,12 @@ export default function BusModal({
         color: busToEdit.color || '',
         estado_bus: busToEdit.estado_bus || 'ACTIVO',
         tiene_rampa: Boolean(busToEdit.tiene_rampa),
+        id_tipo_servicio: busToEdit.id_tipo_servicio ? String(busToEdit.id_tipo_servicio) : '',
       })
     } else {
+      const convencional = tiposServicio.find(
+        (t: any) => String(t.nombre || '').toUpperCase() === 'CONVENCIONAL',
+      )
       setFormData({
         rua: '',
         numero_chassis: '',
@@ -70,10 +77,13 @@ export default function BusModal({
         color: '',
         estado_bus: 'ACTIVO',
         tiene_rampa: false,
+        id_tipo_servicio: convencional?.id_tipo_servicio
+          ? String(convencional.id_tipo_servicio)
+          : (tiposServicio[0]?.id_tipo_servicio ? String(tiposServicio[0].id_tipo_servicio) : ''),
       })
     }
     setError('')
-  }, [busToEdit, isOpen, marcas, tiposCarroceria, marcasCarroceria])
+  }, [busToEdit, isOpen, marcas, tiposCarroceria, marcasCarroceria, tiposServicio])
 
   // Foco en RUA al abrir (alta y edición)
   useEffect(() => {
@@ -126,6 +136,7 @@ export default function BusModal({
       color: formData.color,
       estado_bus: formData.estado_bus,
       tiene_rampa: Boolean(formData.tiene_rampa),
+      id_tipo_servicio: formData.id_tipo_servicio ? Number(formData.id_tipo_servicio) : null,
     }
 
     try {
@@ -321,6 +332,23 @@ export default function BusModal({
             >
               <option value="no">No</option>
               <option value="si">Sí</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="form-label" htmlFor="bus-tipo-servicio">Tipo de servicio</label>
+            <select
+              id="bus-tipo-servicio"
+              className="form-control"
+              value={formData.id_tipo_servicio}
+              onChange={e => setFormData({ ...formData, id_tipo_servicio: e.target.value })}
+            >
+              <option value="">-- Seleccionar --</option>
+              {tiposServicio.map(t => (
+                <option key={t.id_tipo_servicio} value={t.id_tipo_servicio}>
+                  {t.nombre}
+                </option>
+              ))}
             </select>
           </div>
 

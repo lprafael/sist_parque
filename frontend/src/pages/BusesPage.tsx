@@ -414,6 +414,7 @@ export default function BusesPage() {
                     <th>Marca</th>
                     <th>Año</th>
                     <th>Carrocería</th>
+                    <th>Tipo servicio</th>
                     <th>Empresa</th>
                     <th>ITV Vencimiento</th>
                     <th>Estado ITV</th>
@@ -444,6 +445,9 @@ export default function BusesPage() {
                             ({bus.tipo_carroceria_nombre})
                           </span>
                         )}
+                      </td>
+                      <td style={{ fontSize: '0.8rem' }}>
+                        {bus.tipo_servicio_nombre ?? <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
                       <td style={{ fontSize: '0.8rem', maxWidth: '180px',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

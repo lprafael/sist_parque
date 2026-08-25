@@ -210,6 +210,12 @@ class PreviewResult:
     bajas_ya_en_db: int = 0
     bajas_sin_match_db: int = 0
     muestra_bajas: list[dict] = field(default_factory=list)
+    # Presentes en General pero BAJA/INACTIVO en DB → se activarán al aplicar
+    a_reactivar: int = 0
+    muestra_reactivar: list[dict] = field(default_factory=list)
+    # Mismo chasis, RUA distinta → se alineará RUA Excel→DB al aplicar
+    rua_a_alinear: int = 0
+    muestra_rua_alinear: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -219,6 +225,7 @@ class ApplyResult:
     buses_activados: int = 0
     buses_inactivados: int = 0
     buses_baja: int = 0
+    buses_rua_alineados: int = 0
     itv_insertados: int = 0
     itv_sin_cambio: int = 0
     seguros_insertados: int = 0
@@ -455,7 +462,9 @@ async def build_preview(db: AsyncSession, file_bytes: bytes) -> PreviewResult:
     rua_map: dict[str, Any] = {}
     chassis_map: dict[str, Any] = {}
     activos_ids: set[int] = set()
+    id_to_meta: dict[int, tuple] = {}
     for id_bus, rua, chassis, estado in db_buses:
+        id_to_meta[id_bus] = (rua, chassis, estado)
         if rua:
             rua_map[str(rua).strip().upper()] = id_bus
         if chassis:
@@ -486,6 +495,35 @@ async def build_preview(db: AsyncSession, file_bytes: bytes) -> PreviewResult:
         if id_bus:
             matched_ids.add(id_bus)
             excel_ids.add(id_bus)
+            db_rua, db_chassis, db_estado = id_to_meta.get(id_bus, (None, None, None))
+            db_estado_u = (db_estado or "").upper()
+            db_rua_u = str(db_rua).strip().upper() if db_rua else ""
+
+            # En General pero no ACTIVO → se reactivará al aplicar
+            if db_estado_u and db_estado_u != "ACTIVO":
+                preview.a_reactivar += 1
+                if len(preview.muestra_reactivar) < 15:
+                    preview.muestra_reactivar.append({
+                        "id_bus": id_bus,
+                        "rua_excel": r.rua,
+                        "rua_db": db_rua,
+                        "chassis": r.chassis or db_chassis,
+                        "estado_db": db_estado,
+                        "match": how,
+                    })
+
+            # Mismo bus (match chasis o RUA), RUA distinta → alinear al aplicar
+            if r.rua and db_rua_u and db_rua_u != r.rua:
+                preview.rua_a_alinear += 1
+                if len(preview.muestra_rua_alinear) < 15:
+                    preview.muestra_rua_alinear.append({
+                        "id_bus": id_bus,
+                        "rua_db": db_rua,
+                        "rua_excel": r.rua,
+                        "chassis": r.chassis or db_chassis,
+                        "match": how,
+                    })
+
             cur_itv = itv_map.get(id_bus)
             if r.vencimiento_itv:
                 if not cur_itv or cur_itv[0] != r.fecha_itv or cur_itv[1] != r.vencimiento_itv:
@@ -515,10 +553,6 @@ async def build_preview(db: AsyncSession, file_bytes: bytes) -> PreviewResult:
     solo_db = activos_ids - matched_ids
     preview.solo_db_activos = len(solo_db)
 
-    id_to_meta = {
-        id_bus: (rua, chassis, estado)
-        for id_bus, rua, chassis, estado in db_buses
-    }
     for id_bus in list(solo_db)[:15]:
         rua, chassis, _ = id_to_meta.get(id_bus, (None, None, None))
         preview.muestra_solo_db.append({"id_bus": id_bus, "rua": rua, "chassis": chassis})
@@ -683,6 +717,43 @@ def _bus_in_excel(bus: Bus, excel_ruas: set[str], excel_chassis: set[str]) -> bo
     return (rua and rua in excel_ruas) or (chassis and chassis in excel_chassis)
 
 
+async def _reactivar_asignacion_si_cerrada(db: AsyncSession, bus: Bus) -> None:
+    """Si la última asignación está cerrada, la reabre al volver a ACTIVO desde General."""
+    res = await db.execute(
+        select(BusEmpresa)
+        .where(BusEmpresa.id_bus == bus.id_bus)
+        .order_by(BusEmpresa.fecha_asignacion.desc().nulls_last(), BusEmpresa.id_asignacion.desc())
+        .limit(1)
+    )
+    asig = res.scalar_one_or_none()
+    if not asig:
+        return
+    cerrada = asig.fecha_fin_asignacion is not None or (asig.estado_asignacion or "").upper() == "CERRADA"
+    if not cerrada:
+        return
+    asig.fecha_fin_asignacion = None
+    asig.estado_asignacion = "ACTIVA"
+    nota = " | REACTIVADO desde Excel General"
+    asig.observaciones = ((asig.observaciones or "").rstrip() + nota)[:2000]
+
+
+def _alinear_rua_desde_excel(
+    bus: Bus,
+    rua_excel: str,
+    rua_map: dict[str, Bus],
+) -> bool:
+    """Actualiza RUA del bus al valor del Excel. Devuelve True si cambió."""
+    nueva = rua_excel.strip().upper()
+    actual = str(bus.rua).strip().upper() if bus.rua else ""
+    if not nueva or actual == nueva:
+        return False
+    if actual and actual in rua_map and rua_map[actual] is bus:
+        del rua_map[actual]
+    bus.rua = nueva[:20]
+    rua_map[nueva] = bus
+    return True
+
+
 async def sincronizar_estado_desde_excel(
     db: AsyncSession,
     file_bytes: bytes,
@@ -716,6 +787,7 @@ async def sincronizar_estado_desde_excel(
             if (b.estado_bus or "").upper() != "ACTIVO":
                 b.estado_bus = "ACTIVO"
                 result.buses_activados += 1
+                await _reactivar_asignacion_si_cerrada(db, b)
         elif _bus_in_excel(b, bajas_ruas, bajas_chassis):
             # Ya tratado arriba como BAJA
             continue
@@ -811,8 +883,9 @@ async def apply_import(
                         bus.id_tipo_servicio = id_tipo_serv
                     if r.tecnologia:
                         bus.combustible = r.tecnologia[:50]
-                    if r.rua and (not bus.rua or str(bus.rua).upper() in ("N/D",)):
-                        bus.rua = r.rua
+                    # Excel es fuente de verdad para RUA (corrige chapas / typos)
+                    if r.rua and _alinear_rua_desde_excel(bus, r.rua, rua_map):
+                        result.buses_rua_alineados += 1
                     result.buses_actualizados += 1
                 elif crear_faltantes:
                     rua_val = (r.rua or f"CHASSIS_{r.chassis}")[:20]
@@ -950,15 +1023,23 @@ async def apply_import(
         result=result,
     )
 
+    # Siempre: si está en General y no está ACTIVO → reactivar (prioridad General sobre BAJA)
+    for b in buses:
+        if not _bus_in_excel(b, excel_ruas, excel_chassis):
+            continue
+        if (b.estado_bus or "").upper() == "ACTIVO":
+            continue
+        b.estado_bus = "ACTIVO"
+        result.buses_activados += 1
+        await _reactivar_asignacion_si_cerrada(db, b)
+
     if sincronizar_estado:
         for b in buses:
             if _bus_in_excel(b, excel_ruas, excel_chassis):
-                if (b.estado_bus or "").upper() != "ACTIVO":
-                    b.estado_bus = "ACTIVO"
-                    result.buses_activados += 1
-            elif _bus_in_excel(b, bajas_ruas, bajas_chassis):
                 continue
-            elif (b.estado_bus or "").upper() == "ACTIVO":
+            if _bus_in_excel(b, bajas_ruas, bajas_chassis):
+                continue
+            if (b.estado_bus or "").upper() == "ACTIVO":
                 b.estado_bus = "INACTIVO"
                 result.buses_inactivados += 1
 

@@ -78,11 +78,17 @@ async def preview_excel(
         "bajas_ya_en_db": preview.bajas_ya_en_db,
         "bajas_sin_match_db": preview.bajas_sin_match_db,
         "muestra_bajas": preview.muestra_bajas,
+        "a_reactivar": preview.a_reactivar,
+        "muestra_reactivar": preview.muestra_reactivar,
+        "rua_a_alinear": preview.rua_a_alinear,
+        "muestra_rua_alinear": preview.muestra_rua_alinear,
         "mensaje": (
             f"Planilla '{preview.hoja}' con {preview.total_excel} buses. "
             f"{preview.matched_rua + preview.matched_chassis} coinciden con la DB; "
             f"{preview.solo_excel} solo en Excel; "
             f"{preview.itv_actualizar} ITV a actualizar"
+            + (f"; {preview.a_reactivar} a reactivar" if preview.a_reactivar else "")
+            + (f"; {preview.rua_a_alinear} RUA a alinear" if preview.rua_a_alinear else "")
             + (
                 f"; hoja BAJAS: {preview.bajas_a_aplicar} a dar de baja"
                 if preview.hoja_bajas
@@ -135,6 +141,8 @@ async def aplicar_excel(
             "filename": file.filename,
             "buses_creados": result.buses_creados,
             "buses_actualizados": result.buses_actualizados,
+            "buses_activados": result.buses_activados,
+            "buses_rua_alineados": result.buses_rua_alineados,
             "buses_baja": result.buses_baja,
             "itv_insertados": result.itv_insertados,
             "seguros_insertados": result.seguros_insertados,
@@ -151,6 +159,7 @@ async def aplicar_excel(
         "buses_activados": result.buses_activados,
         "buses_inactivados": result.buses_inactivados,
         "buses_baja": result.buses_baja,
+        "buses_rua_alineados": result.buses_rua_alineados,
         "itv_insertados": result.itv_insertados,
         "itv_sin_cambio": result.itv_sin_cambio,
         "seguros_insertados": result.seguros_insertados,
@@ -160,6 +169,8 @@ async def aplicar_excel(
             f"Importación aplicada: {result.buses_actualizados} buses actualizados, "
             f"{result.buses_creados} creados, {result.itv_insertados} ITV nuevas, "
             f"{result.seguros_insertados} seguros"
+            + (f", {result.buses_activados} reactivados" if result.buses_activados else "")
+            + (f", {result.buses_rua_alineados} RUA alineadas" if result.buses_rua_alineados else "")
             + (f", {result.buses_baja} dados de baja" if result.buses_baja else "")
             + "."
         ),

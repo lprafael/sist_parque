@@ -30,6 +30,10 @@ type PreviewData = {
   bajas_ya_en_db?: number
   bajas_sin_match_db?: number
   muestra_bajas?: Array<Record<string, unknown>>
+  a_reactivar?: number
+  muestra_reactivar?: Array<Record<string, unknown>>
+  rua_a_alinear?: number
+  muestra_rua_alinear?: Array<Record<string, unknown>>
   mensaje: string
 }
 
@@ -41,6 +45,7 @@ type ApplyData = {
   buses_activados: number
   buses_inactivados: number
   buses_baja?: number
+  buses_rua_alineados?: number
   itv_insertados: number
   itv_sin_cambio: number
   seguros_insertados: number
@@ -448,6 +453,8 @@ export default function ImportadorPage() {
               <Stat label="ITV a actualizar" value={preview.itv_actualizar} />
               <Stat label="ITV igual" value={preview.itv_igual} />
               <Stat label="Sin fecha ITV" value={preview.itv_sin_fecha} />
+              <Stat label="A reactivar" value={preview.a_reactivar || 0} tone="warn" />
+              <Stat label="RUA a alinear" value={preview.rua_a_alinear || 0} tone="warn" />
               {preview.hoja_bajas && (
                 <>
                   <Stat label="BAJAS en Excel" value={preview.total_bajas_excel || 0} />
@@ -466,6 +473,16 @@ export default function ImportadorPage() {
               </div>
             )}
 
+            <SampleTable
+              title="A reactivar (en General, BAJA/INACTIVO en DB)"
+              rows={preview.muestra_reactivar || []}
+              cols={['id_bus', 'rua_excel', 'rua_db', 'chassis', 'estado_db']}
+            />
+            <SampleTable
+              title="RUA a alinear (Excel → DB)"
+              rows={preview.muestra_rua_alinear || []}
+              cols={['id_bus', 'rua_db', 'rua_excel', 'chassis', 'match']}
+            />
             <SampleTable
               title="Muestra solo en Excel (se crearían)"
               rows={preview.muestra_solo_excel}
@@ -496,7 +513,7 @@ export default function ImportadorPage() {
                   checked={sincronizarEstado}
                   onChange={(e) => setSincronizarEstado(e.target.checked)}
                 />
-                Sincronizar ACTIVO/INACTIVO con General (BAJAS se aplican siempre)
+                Sincronizar INACTIVO fuera de General (reactivación y alineación RUA se aplican siempre)
               </label>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: '0.9rem' }}>
                 <input
@@ -552,7 +569,8 @@ export default function ImportadorPage() {
                 <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1.1rem', fontSize: '0.85rem' }}>
                   <li>Actualizados: {applyResult.buses_actualizados}</li>
                   <li>Creados: {applyResult.buses_creados}</li>
-                  <li>Activados: {applyResult.buses_activados}</li>
+                  <li>Activados/reactivados: {applyResult.buses_activados}</li>
+                  <li>RUA alineadas: {applyResult.buses_rua_alineados ?? 0}</li>
                   <li>Inactivados: {applyResult.buses_inactivados}</li>
                   <li>Dados de baja: {applyResult.buses_baja ?? 0}</li>
                   <li>ITV nuevas: {applyResult.itv_insertados} (sin cambio: {applyResult.itv_sin_cambio})</li>

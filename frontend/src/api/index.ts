@@ -155,6 +155,11 @@ export const reportesApi = {
     api.get(`/reportes/planilla/reporte/${key}`, { params, timeout: 120000 }),
   planillaReporteExcel: (key: string, params?: { anio?: number }) =>
     api.get(`/reportes/planilla/reporte/${key}/excel`, { params, responseType: 'blob', timeout: 180000 }),
+  planillaParqueEmpresas: () => api.get('/reportes/planilla/parque/empresas'),
+  planillaParqueExcel: (params?: Record<string, string>) =>
+    api.get('/reportes/planilla/parque/excel', { params, responseType: 'blob', timeout: 300000 }),
+  planillaParqueEmpresa: (id_eot: string, params?: { modo?: string }) =>
+    api.get(`/reportes/planilla/parque/${id_eot}`, { params }),
   planillaEstado: () => api.get('/reportes/planilla/estado'),
   planillaHojas: () => api.get('/reportes/planilla/hojas'),
   planillaHoja: (nombre: string, params?: { page?: number; page_size?: number }) =>

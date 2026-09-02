@@ -594,6 +594,166 @@ async def planilla_reporte_excel(
     )
 
 
+# ── Planillas operativas por empresa (una hoja por EOT) ─────
+
+def _escribir_hoja_planilla_parque(ws, data: dict) -> None:
+    """Escribe una hoja con layout planilla parque automotor."""
+    border_thin = Border(
+        left=Side(style="thin", color="333333"),
+        right=Side(style="thin", color="333333"),
+        top=Side(style="thin", color="333333"),
+        bottom=Side(style="thin", color="333333"),
+    )
+    align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    fills = {
+        "title": PatternFill(start_color="E8E8E8", end_color="E8E8E8", fill_type="solid"),
+        "col_header": PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid"),
+        "footer": PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid"),
+    }
+    filas = list(data.get("filas") or [])
+    row_kinds = list(data.get("row_kinds") or [])
+    date_cols = {6, 7, 8, 12, 13, 14}  # hab, seg pas, seg ter, itv ant, itv, venc (1-based aprox)
+
+    for r_idx, row in enumerate(filas, start=1):
+        kind = row_kinds[r_idx - 1] if r_idx - 1 < len(row_kinds) else "data"
+        cells = list(row) if isinstance(row, (list, tuple)) else [row]
+        for c_idx, val in enumerate(cells, start=1):
+            cell = ws.cell(row=r_idx, column=c_idx, value="" if val is None else val)
+            cell.border = border_thin
+            cell.alignment = align_center
+            if isinstance(val, date):
+                cell.number_format = "DD/MM/YYYY"
+            if kind == "title":
+                cell.fill = fills["title"]
+                cell.font = Font(name="Calibri", size=11, bold=True)
+            elif kind == "subtitle":
+                cell.font = Font(name="Calibri", size=10, bold=True)
+            elif kind == "col_header":
+                cell.fill = fills["col_header"]
+                cell.font = Font(name="Calibri", size=9, bold=True)
+            elif kind == "footer":
+                cell.fill = fills["footer"]
+                cell.font = Font(name="Calibri", size=9, bold=True)
+                if c_idx in (4, 5) and isinstance(val, date):
+                    cell.number_format = "DD/MM/YYYY"
+            elif kind == "data":
+                cell.font = Font(name="Calibri", size=9)
+                if c_idx in date_cols and val is not None:
+                    cell.number_format = "DD/MM/YYYY"
+
+    header_row_idx = next(
+        (i + 1 for i, k in enumerate(row_kinds) if k == "col_header"),
+        None,
+    )
+    if header_row_idx:
+        ws.freeze_panes = f"A{header_row_idx + 1}"
+
+    widths = [8, 14, 6, 18, 10, 12, 12, 14, 14, 22, 16, 16, 16, 12, 14, 14, 28]
+    for i, w in enumerate(widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+
+def _workbook_planillas_parque(planillas: list[dict]) -> openpyxl.Workbook:
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    used_names: set[str] = set()
+    for data in planillas:
+        base = _safe_sheet_name(str(data.get("hoja") or "Empresa"))
+        name = base
+        n = 2
+        while name in used_names:
+            suffix = f" {n}"
+            name = (base[: 31 - len(suffix)] + suffix) if len(base) + len(suffix) > 31 else base + suffix
+            n += 1
+        used_names.add(name)
+        ws = wb.create_sheet(title=name)
+        _escribir_hoja_planilla_parque(ws, data)
+    if not wb.sheetnames:
+        ws = wb.create_sheet(title="Sin datos")
+        ws.cell(row=1, column=1, value="No hay empresas con buses activos para exportar.")
+    return wb
+
+
+@router.get("/planilla/parque/empresas")
+async def planilla_parque_empresas(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Lista empresas con parque activo disponibles para planilla operativa."""
+    from app.services.planilla_parque_empresa import listar_empresas_parque
+
+    empresas = await listar_empresas_parque(db)
+    return {
+        "total": len(empresas),
+        "empresas": empresas,
+        "fuente": "registro_habilitacion + public.eots",
+    }
+
+
+@router.get("/planilla/parque/excel")
+async def planilla_parque_excel(
+    empresas: Optional[str] = Query(
+        None,
+        description="IDs id_eot_vmt_hex separados por coma. Vacío = todas las empresas con parque.",
+    ),
+    modo: str = Query(
+        "empresa",
+        description="operativa = subsidio (solo con ITV); empresa = informes (todos + pie ITV)",
+        pattern="^(operativa|empresa)$",
+    ),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """
+    Descarga un libro Excel con una hoja por empresa.
+    - operativa: planilla para subsidio (excluye buses sin ITV / vencidas sin fecha)
+    - empresa: planilla para informes (incluye vencidas; pie con totales ITV)
+    Sin columna POD/RTD.
+    """
+    from app.services.planilla_parque_empresa import generar_planillas_parque
+
+    ids = _parse_list(empresas) if empresas else None
+    planillas = await generar_planillas_parque(db, ids_eot=ids, modo=modo)  # type: ignore[arg-type]
+    if not planillas:
+        raise HTTPException(
+            status_code=404,
+            detail="No se encontraron empresas con buses activos para generar planillas.",
+        )
+
+    wb = _workbook_planillas_parque(planillas)
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    fecha = date.today().isoformat()
+    tag = "Operativas" if modo == "operativa" else "Empresa"
+    filename = f"Planillas_Parque_{tag}_{fecha}.xlsx"
+    return StreamingResponse(
+        stream,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@router.get("/planilla/parque/{id_eot}")
+async def planilla_parque_empresa(
+    id_eot: str,
+    modo: str = Query("empresa", pattern="^(operativa|empresa)$"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Vista previa JSON de la planilla de una empresa."""
+    from app.services.planilla_parque_empresa import generar_planillas_parque
+
+    planillas = await generar_planillas_parque(db, ids_eot=[id_eot], modo=modo)  # type: ignore[arg-type]
+    if not planillas:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No hay buses para la empresa '{id_eot}' en modo '{modo}'.",
+        )
+    return planillas[0]
+
+
 # ── Planilla Excel (opcional / legado) ──────────────────────
 
 @router.get("/planilla/estado")

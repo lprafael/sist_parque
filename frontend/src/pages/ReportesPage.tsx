@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { reportesApi, empresasApi, busesApi } from '../api'
 import PlanillaTabs from '../components/reportes/PlanillaTabs'
+import PlanillaParqueView from '../components/reportes/PlanillaParqueView'
 
 const CAMPOS_DEFAULT = [
   { key: 'id_bus', label: 'N° ID', default: true },
@@ -201,7 +202,7 @@ function CheckGroup({
 }
 
 export default function ReportesPage() {
-  const [vista, setVista] = useState<'constructor' | 'planilla'>('planilla')
+  const [vista, setVista] = useState<'constructor' | 'planilla' | 'parque'>('parque')
   const [downloading, setDownloading] = useState(false)
   const [empresasSel, setEmpresasSel] = useState<string[]>([])
   const [estadoBus, setEstadoBus] = useState('')
@@ -309,7 +310,9 @@ export default function ReportesPage() {
           <p className="page-header-sub">
             {vista === 'planilla'
               ? 'Pestañas con cuadros en vivo (edad, bajas, ITV, faltantes…) como en la planilla ITV'
-              : 'Armá un reporte personalizado: filtrá, elegí columnas y resúmenes, y descargá en Excel'}
+              : vista === 'parque'
+                ? 'Planilla operativa del parque por empresa: un Excel con una hoja por EOT'
+                : 'Armá un reporte personalizado: filtrá, elegí columnas y resúmenes, y descargá en Excel'}
           </p>
         </div>
         {vista === 'constructor' && (
@@ -328,6 +331,14 @@ export default function ReportesPage() {
         <button
           type="button"
           role="tab"
+          className={`report-tab ${vista === 'parque' ? 'active' : ''}`}
+          onClick={() => setVista('parque')}
+        >
+          Planillas por empresa
+        </button>
+        <button
+          type="button"
+          role="tab"
           className={`report-tab ${vista === 'planilla' ? 'active' : ''}`}
           onClick={() => setVista('planilla')}
         >
@@ -343,7 +354,9 @@ export default function ReportesPage() {
         </button>
       </div>
 
-      {vista === 'planilla' ? (
+      {vista === 'parque' ? (
+        <PlanillaParqueView />
+      ) : vista === 'planilla' ? (
         <PlanillaTabs />
       ) : (
       <>

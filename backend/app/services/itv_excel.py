@@ -151,6 +151,45 @@ def normalize_resultado_itv(val: Any) -> Optional[str]:
     return None
 
 
+_FOOTER_CHASSIS_MARKERS = (
+    "ACTUALIZ",
+    "IMPRESI",
+    "PARQUE AUTORIZ",
+    "PARQUE OPERAT",
+    "RESERVA TECNIC",
+    "SERVICIO ",
+    "TOTAL BUSES",
+    "DECLARADO",
+)
+
+
+def _is_footer_or_junk_row(
+    *,
+    rua: Optional[str],
+    chassis: Optional[str],
+    marca: Optional[str],
+    numero_orden: Optional[int],
+) -> bool:
+    """Excluye pies incrustados en General (ACTUALIZACIÓN:/IMPRESIÓN, fechas como RUA, etc.)."""
+    ch = (chassis or "").upper().strip()
+    ru = (rua or "").upper().strip()
+    if any(m in ch for m in _FOOTER_CHASSIS_MARKERS):
+        return True
+    if any(m in ru for m in _FOOTER_CHASSIS_MARKERS):
+        return True
+    # RUA que es fecha serializada (ej. 2026-08-31 00:00:00)
+    if re.match(r"^\d{4}-\d{2}-\d{2}", ru):
+        return True
+    if not marca:
+        return True
+    # Chasis real de bus suele ser VIN / código largo
+    if len(re.sub(r"[^A-Z0-9]", "", ch)) < 8:
+        return True
+    if numero_orden is None and not ch:
+        return True
+    return False
+
+
 @dataclass
 class ExcelBusRow:
     row_num: int
@@ -306,10 +345,19 @@ def parse_general_sheet(file_bytes: bytes) -> tuple[str, Optional[str], list[Exc
         if fb and not fecha_corte:
             fecha_corte = fb.isoformat()
 
+        marca = clean_str(cell(row, "marca"))
+        if _is_footer_or_junk_row(
+            rua=rua,
+            chassis=chassis,
+            marca=marca,
+            numero_orden=orden,
+        ):
+            continue
+
         item = ExcelBusRow(
             row_num=r_idx,
             numero_orden=orden,
-            marca=clean_str(cell(row, "marca")),
+            marca=marca,
             anio=anio,
             chassis=chassis,
             rua=rua,

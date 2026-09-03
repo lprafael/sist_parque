@@ -361,8 +361,17 @@ def _fin_mes_anterior(ref: date) -> date:
 
 
 def _encabezado(ncols: int, hoy: date) -> tuple[list[list[Any]], list[str]]:
+    """Encabezado tipo oficial: 2 filas vacías (logo) + título + 2 subtítulos."""
     grid: list[list[Any]] = []
     kinds: list[str] = []
+
+    # Filas 1-2: área de logo / margen (se combinarán al exportar)
+    grid.append(_fila_vacia(ncols))
+    kinds.append("blank_header")
+    grid.append(_fila_vacia(ncols))
+    kinds.append("blank_header")
+
+    # Fila 3: título + fecha (col F) + PPASITV
     titulo = _fila_vacia(ncols)
     _cel(titulo, 0, "Planilla de ITV - Actualizado al ")
     _cel(titulo, 5, hoy)

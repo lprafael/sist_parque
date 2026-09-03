@@ -597,49 +597,171 @@ async def planilla_reporte_excel(
 # ── Planillas operativas por empresa (una hoja por EOT) ─────
 
 def _escribir_hoja_planilla_parque(ws, data: dict) -> None:
-    """Escribe una hoja con layout planilla parque automotor."""
+    """Escribe una hoja con layout planilla parque (encabezado combinado + pie limpio)."""
     border_thin = Border(
-        left=Side(style="thin", color="333333"),
-        right=Side(style="thin", color="333333"),
-        top=Side(style="thin", color="333333"),
-        bottom=Side(style="thin", color="333333"),
+        left=Side(style="thin", color="666666"),
+        right=Side(style="thin", color="666666"),
+        top=Side(style="thin", color="666666"),
+        bottom=Side(style="thin", color="666666"),
+    )
+    border_box_left = Border(
+        left=Side(style="thin", color="000000"),
+        right=Side(style="thin", color="000000"),
+        top=Side(style="thin", color="000000"),
+        bottom=Side(style="thin", color="000000"),
     )
     align_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    fills = {
-        "title": PatternFill(start_color="E8E8E8", end_color="E8E8E8", fill_type="solid"),
-        "col_header": PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid"),
-        "footer": PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid"),
-    }
+    align_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    align_right = Alignment(horizontal="right", vertical="center", wrap_text=True)
+    fill_header = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
+    fill_footer_box = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+
     filas = list(data.get("filas") or [])
     row_kinds = list(data.get("row_kinds") or [])
-    date_cols = {6, 7, 8, 12, 13, 14}  # hab, seg pas, seg ter, itv ant, itv, venc (1-based aprox)
+    ncols = max((len(r) for r in filas if isinstance(r, (list, tuple))), default=1)
+    modo = (data.get("modo") or data.get("layout") or "").lower()
+    # Columnas de fecha 1-based según modo (sin POD/RTD)
+    if "empresa" in modo:
+        date_cols = {7, 8, 9, 13, 14}  # hab, seguros, fecha itv, venc
+    else:
+        date_cols = {7, 8, 9, 13, 14, 15}  # + itv anterior
 
+    # ── Escribir valores ────────────────────────────────────
     for r_idx, row in enumerate(filas, start=1):
         kind = row_kinds[r_idx - 1] if r_idx - 1 < len(row_kinds) else "data"
         cells = list(row) if isinstance(row, (list, tuple)) else [row]
+        while len(cells) < ncols:
+            cells.append(None)
+
         for c_idx, val in enumerate(cells, start=1):
-            cell = ws.cell(row=r_idx, column=c_idx, value="" if val is None else val)
-            cell.border = border_thin
-            cell.alignment = align_center
+            cell = ws.cell(row=r_idx, column=c_idx, value=None if val == "" else val)
             if isinstance(val, date):
                 cell.number_format = "DD/MM/YYYY"
+
+            if kind in ("blank_header", "blank"):
+                continue
+
             if kind == "title":
-                cell.fill = fills["title"]
+                cell.font = Font(name="Calibri", size=14, bold=True)
+                if c_idx == 1:
+                    cell.alignment = align_left
+                else:
+                    cell.alignment = align_center
+                continue
+
+            if kind == "subtitle":
                 cell.font = Font(name="Calibri", size=11, bold=True)
-            elif kind == "subtitle":
-                cell.font = Font(name="Calibri", size=10, bold=True)
-            elif kind == "col_header":
-                cell.fill = fills["col_header"]
-                cell.font = Font(name="Calibri", size=9, bold=True)
-            elif kind == "footer":
-                cell.fill = fills["footer"]
-                cell.font = Font(name="Calibri", size=9, bold=True)
-                if c_idx in (4, 5) and isinstance(val, date):
-                    cell.number_format = "DD/MM/YYYY"
-            elif kind == "data":
+                cell.alignment = align_left
+                continue
+
+            if kind == "col_header":
+                cell.value = "" if val is None else val
+                cell.fill = fill_header
+                cell.font = Font(name="Calibri", size=8, bold=True)
+                cell.alignment = align_center
+                cell.border = border_thin
+                continue
+
+            if kind == "data":
+                cell.value = "" if val is None else val
                 cell.font = Font(name="Calibri", size=9)
-                if c_idx in date_cols and val is not None:
+                cell.alignment = align_center
+                cell.border = border_thin
+                if c_idx in date_cols and isinstance(val, date):
                     cell.number_format = "DD/MM/YYYY"
+                continue
+
+            if kind == "footer":
+                if val is None:
+                    continue
+                cell.font = Font(name="Calibri", size=9, bold=True)
+                # Etiquetas largas a la izquierda / derecha; valores centrados
+                if c_idx in (4, 6) and isinstance(val, str):
+                    cell.alignment = align_right
+                    cell.font = Font(name="Calibri", size=9, bold=True)
+                elif c_idx in (7, 12, 13) and isinstance(val, str) and len(str(val)) > 12:
+                    cell.alignment = align_left
+                    if c_idx >= 12:
+                        cell.border = border_box_left
+                        cell.fill = fill_footer_box
+                elif c_idx in (15, 16) or (c_idx == 14 and isinstance(val, (int, float))):
+                    cell.alignment = align_center
+                    if c_idx in (14, 15, 16) and not isinstance(val, str):
+                        cell.border = border_box_left
+                        cell.fill = fill_footer_box
+                else:
+                    cell.alignment = align_center
+                if isinstance(val, date):
+                    cell.number_format = "DD/MM/YYYY"
+                if isinstance(val, float) and 0 < val < 5 and c_idx in (13, 14, 15):
+                    # % OPERATIVO
+                    cell.number_format = "0%"
+                continue
+
+    # ── Combinar celdas del encabezado (como planilla oficial) ──
+    # A1:últimaCol fila1-2 (área logo)
+    last_col = openpyxl.utils.get_column_letter(ncols)
+    try:
+        ws.merge_cells(f"A1:{last_col}2")
+    except Exception:
+        pass
+    # Fecha F3:G3
+    if ncols >= 7:
+        try:
+            ws.merge_cells("F3:G3")
+        except Exception:
+            pass
+    # Título subtítulos: combinar A hasta E para que se lea bien
+    for r in (4, 5):
+        if ncols >= 5:
+            try:
+                ws.merge_cells(f"A{r}:E{r}")
+            except Exception:
+                pass
+
+    # Título fila 3: combinar A:E
+    if ncols >= 5:
+        try:
+            ws.merge_cells("A3:E3")
+        except Exception:
+            pass
+
+    # Pie: combinar etiquetas largas de resolución (col F) hacia la izquierda visual
+    footer_rows = [i + 1 for i, k in enumerate(row_kinds) if k == "footer"]
+    for r in footer_rows:
+        # Si F tiene texto largo de resolución, combinar C:F o dejar F ancho
+        fval = ws.cell(r, 6).value
+        if isinstance(fval, str) and len(fval) > 30 and (
+            "Parque" in fval or "Reserva" in fval
+        ):
+            if all(ws.cell(r, c).value is None for c in (3, 4, 5)):
+                try:
+                    ws.cell(r, 3).value = fval
+                    ws.cell(r, 6).value = None
+                    ws.merge_cells(start_row=r, start_column=3, end_row=r, end_column=6)
+                    ws.cell(r, 3).alignment = align_right
+                    ws.cell(r, 3).font = Font(name="Calibri", size=9)
+                except Exception:
+                    pass
+        # Bloque derecho ITV / tipos: merge etiqueta M:N si N vacío
+        mval = ws.cell(r, 13).value
+        if isinstance(mval, str) and mval.strip():
+            nval = ws.cell(r, 14).value
+            if nval is None and ncols >= 14:
+                try:
+                    ws.merge_cells(start_row=r, start_column=13, end_row=r, end_column=14)
+                    ws.cell(r, 13).alignment = align_left
+                    ws.cell(r, 13).border = border_box_left
+                    ws.cell(r, 13).fill = fill_footer_box
+                except Exception:
+                    pass
+
+    # Alturas
+    ws.row_dimensions[1].height = 18
+    ws.row_dimensions[2].height = 18
+    ws.row_dimensions[3].height = 22
+    ws.row_dimensions[4].height = 18
+    ws.row_dimensions[5].height = 18
 
     header_row_idx = next(
         (i + 1 for i, k in enumerate(row_kinds) if k == "col_header"),
@@ -647,10 +769,17 @@ def _escribir_hoja_planilla_parque(ws, data: dict) -> None:
     )
     if header_row_idx:
         ws.freeze_panes = f"A{header_row_idx + 1}"
+        ws.row_dimensions[header_row_idx].height = 30
 
-    widths = [8, 14, 6, 18, 10, 12, 12, 14, 14, 22, 16, 16, 16, 12, 14, 14, 28]
-    for i, w in enumerate(widths, start=1):
+    # Anchos (sin POD/RTD)
+    widths = [8, 12, 6, 18, 10, 12, 12, 13, 13, 18, 14, 14, 14, 12, 14, 14, 26]
+    for i in range(1, ncols + 1):
+        w = widths[i - 1] if i - 1 < len(widths) else 12
         ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    # Columna F un poco más ancha para fecha título / etiquetas pie
+    ws.column_dimensions["F"].width = max(ws.column_dimensions["F"].width or 0, 14)
+    ws.column_dimensions["M"].width = max(ws.column_dimensions["M"].width or 0, 22)
 
 
 def _workbook_planillas_parque(planillas: list[dict]) -> openpyxl.Workbook:

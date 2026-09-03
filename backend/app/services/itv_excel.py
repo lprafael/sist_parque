@@ -140,6 +140,14 @@ def normalize_tipo_servicio(val: Any) -> Optional[str]:
     return s[:100]
 
 
+def detect_tiene_rampa(val: Any) -> bool:
+    """En la planilla ITV, (*) en TIPO DE SERVICIO indica bus con rampa / inclusivo."""
+    raw = clean_str(val, upper=True)
+    if not raw:
+        return False
+    return "(*)" in raw or raw.endswith("*") or " (*)" in raw
+
+
 def normalize_resultado_itv(val: Any) -> Optional[str]:
     raw = clean_str(val, upper=True)
     if not raw:
@@ -204,6 +212,7 @@ class ExcelBusRow:
     seguro_pasajeros: Optional[date] = None
     seguro_terceros: Optional[date] = None
     tipo_servicio: Optional[str] = None
+    tiene_rampa: bool = False
     tecnologia: Optional[str] = None
     tipo_carroceria: Optional[str] = None
     marca_carroceria: Optional[str] = None
@@ -238,6 +247,7 @@ class PreviewResult:
     itv_sin_fecha: int = 0
     con_seguro_pasajeros: int = 0
     con_seguro_terceros: int = 0
+    con_rampa: int = 0
     tipos_servicio: dict[str, int] = field(default_factory=dict)
     muestra_solo_excel: list[dict] = field(default_factory=list)
     muestra_solo_db: list[dict] = field(default_factory=list)
@@ -265,6 +275,7 @@ class ApplyResult:
     buses_inactivados: int = 0
     buses_baja: int = 0
     buses_rua_alineados: int = 0
+    buses_rampa_marcados: int = 0
     itv_insertados: int = 0
     itv_sin_cambio: int = 0
     seguros_insertados: int = 0
@@ -354,6 +365,7 @@ def parse_general_sheet(file_bytes: bytes) -> tuple[str, Optional[str], list[Exc
         ):
             continue
 
+        tipo_raw = cell(row, "tipo_servicio")
         item = ExcelBusRow(
             row_num=r_idx,
             numero_orden=orden,
@@ -366,7 +378,8 @@ def parse_general_sheet(file_bytes: bytes) -> tuple[str, Optional[str], list[Exc
             habilitacion=parse_date(cell(row, "habilitacion")),
             seguro_pasajeros=parse_date(cell(row, "seguro_pasajeros")),
             seguro_terceros=parse_date(cell(row, "seguro_terceros")),
-            tipo_servicio=normalize_tipo_servicio(cell(row, "tipo_servicio")),
+            tipo_servicio=normalize_tipo_servicio(tipo_raw),
+            tiene_rampa=detect_tiene_rampa(tipo_raw),
             tecnologia=clean_str(cell(row, "tecnologia"), upper=True),
             tipo_carroceria=clean_str(cell(row, "tipo_carroceria")),
             marca_carroceria=clean_str(cell(row, "marca_carroceria")),
@@ -496,6 +509,9 @@ async def build_preview(db: AsyncSession, file_bytes: bytes) -> PreviewResult:
 
     for r in rows:
         key = r.tipo_servicio or "(vacío)"
+        if r.tiene_rampa:
+            key = f"{key} (*)"
+            preview.con_rampa += 1
         preview.tipos_servicio[key] = preview.tipos_servicio.get(key, 0) + 1
         if r.seguro_pasajeros:
             preview.con_seguro_pasajeros += 1
@@ -929,6 +945,9 @@ async def apply_import(
                         bus.id_marca_carroceria = id_marca_carr
                     if id_tipo_serv:
                         bus.id_tipo_servicio = id_tipo_serv
+                    if bool(bus.tiene_rampa) != bool(r.tiene_rampa):
+                        result.buses_rampa_marcados += 1
+                    bus.tiene_rampa = bool(r.tiene_rampa)
                     if r.tecnologia:
                         bus.combustible = r.tecnologia[:50]
                     # Excel es fuente de verdad para RUA (corrige chapas / typos)
@@ -949,9 +968,12 @@ async def apply_import(
                         id_tipo_servicio=id_tipo_serv,
                         combustible=(r.tecnologia[:50] if r.tecnologia else None),
                         estado_bus="ACTIVO",
+                        tiene_rampa=bool(r.tiene_rampa),
                     )
                     db.add(bus)
                     await db.flush()
+                    if r.tiene_rampa:
+                        result.buses_rampa_marcados += 1
                     rua_map[rua_val.upper()] = bus
                     chassis_map[chassis_val.upper()] = bus
                     result.buses_creados += 1

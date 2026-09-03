@@ -20,6 +20,7 @@ type PreviewData = {
   itv_sin_fecha: number
   con_seguro_pasajeros: number
   con_seguro_terceros: number
+  con_rampa?: number
   tipos_servicio: Record<string, number>
   muestra_solo_excel: Array<Record<string, unknown>>
   muestra_solo_db: Array<Record<string, unknown>>
@@ -46,6 +47,7 @@ type ApplyData = {
   buses_inactivados: number
   buses_baja?: number
   buses_rua_alineados?: number
+  buses_rampa_marcados?: number
   itv_insertados: number
   itv_sin_cambio: number
   seguros_insertados: number
@@ -453,6 +455,7 @@ export default function ImportadorPage() {
               <Stat label="ITV a actualizar" value={preview.itv_actualizar} />
               <Stat label="ITV igual" value={preview.itv_igual} />
               <Stat label="Sin fecha ITV" value={preview.itv_sin_fecha} />
+              <Stat label="Con rampa (*)" value={preview.con_rampa || 0} />
               <Stat label="A reactivar" value={preview.a_reactivar || 0} tone="warn" />
               <Stat label="RUA a alinear" value={preview.rua_a_alinear || 0} tone="warn" />
               {preview.hoja_bajas && (
@@ -571,6 +574,7 @@ export default function ImportadorPage() {
                   <li>Creados: {applyResult.buses_creados}</li>
                   <li>Activados/reactivados: {applyResult.buses_activados}</li>
                   <li>RUA alineadas: {applyResult.buses_rua_alineados ?? 0}</li>
+                  <li>Rampa (*) sincronizados: {applyResult.buses_rampa_marcados ?? 0}</li>
                   <li>Inactivados: {applyResult.buses_inactivados}</li>
                   <li>Dados de baja: {applyResult.buses_baja ?? 0}</li>
                   <li>ITV nuevas: {applyResult.itv_insertados} (sin cambio: {applyResult.itv_sin_cambio})</li>

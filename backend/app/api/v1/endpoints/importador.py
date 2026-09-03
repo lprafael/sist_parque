@@ -67,6 +67,7 @@ async def preview_excel(
         "itv_sin_fecha": preview.itv_sin_fecha,
         "con_seguro_pasajeros": preview.con_seguro_pasajeros,
         "con_seguro_terceros": preview.con_seguro_terceros,
+        "con_rampa": preview.con_rampa,
         "tipos_servicio": preview.tipos_servicio,
         "muestra_solo_excel": preview.muestra_solo_excel,
         "muestra_solo_db": preview.muestra_solo_db,
@@ -143,6 +144,7 @@ async def aplicar_excel(
             "buses_actualizados": result.buses_actualizados,
             "buses_activados": result.buses_activados,
             "buses_rua_alineados": result.buses_rua_alineados,
+            "buses_rampa_marcados": result.buses_rampa_marcados,
             "buses_baja": result.buses_baja,
             "itv_insertados": result.itv_insertados,
             "seguros_insertados": result.seguros_insertados,
@@ -160,6 +162,7 @@ async def aplicar_excel(
         "buses_inactivados": result.buses_inactivados,
         "buses_baja": result.buses_baja,
         "buses_rua_alineados": result.buses_rua_alineados,
+        "buses_rampa_marcados": result.buses_rampa_marcados,
         "itv_insertados": result.itv_insertados,
         "itv_sin_cambio": result.itv_sin_cambio,
         "seguros_insertados": result.seguros_insertados,
@@ -171,6 +174,7 @@ async def aplicar_excel(
             f"{result.seguros_insertados} seguros"
             + (f", {result.buses_activados} reactivados" if result.buses_activados else "")
             + (f", {result.buses_rua_alineados} RUA alineadas" if result.buses_rua_alineados else "")
+            + (f", {result.buses_rampa_marcados} rampa (*) sincronizados" if result.buses_rampa_marcados else "")
             + (f", {result.buses_baja} dados de baja" if result.buses_baja else "")
             + "."
         ),

@@ -275,8 +275,13 @@ async def exportar_buses_excel(
         venc = itv.fecha_vencimiento if itv else None
         estado = calcular_estado_itv(venc)
 
-        if estado_itv and estado != estado_itv.upper():
-            continue
+        if estado_itv:
+            filtro = estado_itv.upper()
+            if filtro == "APROBADO":
+                if estado == "VENCIDO":
+                    continue
+            elif estado != filtro:
+                continue
 
         asig = next((a for a in b.asignaciones if a.fecha_fin_asignacion is None), None)
         empresa_nombre = "-"

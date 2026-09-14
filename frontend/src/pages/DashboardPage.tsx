@@ -223,7 +223,8 @@ export default function DashboardPage() {
           label="ITV Vigentes"
           icon="🔧"
           color="cyan"
-          to="/buses?estado_itv=VIGENTE"
+          to="/buses?estado_itv=APROBADO"
+          hint="Aprobadas (incluye por vencer)"
         />
         <KpiCard
           value={kpis?.itv_por_vencer ?? 0}
@@ -386,9 +387,13 @@ export default function DashboardPage() {
             <PieChart>
               <Pie
                 data={[
-                  { name: 'Vigente',    value: kpis?.itv_vigente ?? 0 },
+                  // itv_vigente = APROBADA (incluye por vencer); el gráfico usa tramos exclusivos
+                  {
+                    name: 'Vigente',
+                    value: Math.max(0, (kpis?.itv_vigente ?? 0) - (kpis?.itv_por_vencer ?? 0)),
+                  },
                   { name: 'Por Vencer', value: kpis?.itv_por_vencer ?? 0 },
-                  { name: 'Vencida',    value: kpis?.itv_vencido ?? 0 },
+                  { name: 'Vencida', value: kpis?.itv_vencido ?? 0 },
                 ]}
                 cx="50%" cy="50%"
                 innerRadius={55} outerRadius={85}

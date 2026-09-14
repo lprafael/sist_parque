@@ -137,8 +137,14 @@ async def listar_buses(
         venc = itv.fecha_vencimiento if itv else None
         estado = calcular_estado_itv(venc)
 
-        if estado_itv and estado != estado_itv.upper():
-            continue
+        if estado_itv:
+            filtro = estado_itv.upper()
+            # APROBADO = planilla (fecha >= hoy): VIGENTE + POR_VENCER + CRITICO
+            if filtro == "APROBADO":
+                if estado == "VENCIDO":
+                    continue
+            elif estado != filtro:
+                continue
 
         out = BusOut(
             id_bus=bus.id_bus,

@@ -433,8 +433,8 @@ class KpiDashboard(BaseModel):
     total_buses: int
     buses_activos: int
     buses_inactivos: int
-    itv_vigente: int
-    itv_por_vencer: int    # próximos 30 días
+    itv_vigente: int  # APROBADA: fecha_vencimiento >= hoy (incluye por vencer)
+    itv_por_vencer: int    # próximos 30 días (subconjunto de itv_vigente)
     itv_vencido: int
     itv_sin_vigente: int = 0  # activos sin ITV vigente (incluidos en itv_vencido)
     # Seguros por tipo (1 póliza vigente por bus+tipo; histórico excluido)

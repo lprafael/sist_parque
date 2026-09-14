@@ -383,7 +383,8 @@ export default function BusesPage() {
               syncParams({ estado_itv: val })
             }}>
             <option value="">Todos los ITV</option>
-            <option value="VIGENTE">ITV Vigente</option>
+            <option value="APROBADO">ITV Aprobado / Vigente</option>
+            <option value="VIGENTE">ITV Vigente (&gt;30 días)</option>
             <option value="POR_VENCER">Por Vencer</option>
             <option value="CRITICO">Crítico</option>
             <option value="VENCIDO">Vencido</option>

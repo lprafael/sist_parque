@@ -11,7 +11,6 @@ import ItvModal from '../components/itv/ItvModal'
 import SeguroHistoryModal from '../components/seguros/SeguroHistoryModal'
 
 const ITV_ESTADO_OPTIONS: { key: string; label: string }[] = [
-  { key: 'APROBADO', label: 'ITV Aprobado / Vigente' },
   { key: 'VIGENTE', label: 'ITV Vigente (>30 días)' },
   { key: 'POR_VENCER', label: 'Por Vencer' },
   { key: 'CRITICO', label: 'Crítico' },
@@ -19,13 +18,24 @@ const ITV_ESTADO_OPTIONS: { key: string; label: string }[] = [
   { key: 'SIN_ITV', label: 'Sin ITV' },
 ]
 
+/** APROBADO (dashboard/planilla) = no vencido: VIGENTE + POR_VENCER + CRITICO */
+const APROBADO_EXPAND = ['VIGENTE', 'POR_VENCER', 'CRITICO'] as const
+
 function parseEstadosItv(raw: string): string[] {
   if (!raw.trim()) return []
   const valid = new Set(ITV_ESTADO_OPTIONS.map(o => o.key))
-  return raw
-    .split(',')
-    .map(s => s.trim().toUpperCase())
-    .filter(s => valid.has(s))
+  const out: string[] = []
+  for (const part of raw.split(',')) {
+    const s = part.trim().toUpperCase()
+    if (s === 'APROBADO') {
+      for (const k of APROBADO_EXPAND) {
+        if (!out.includes(k)) out.push(k)
+      }
+      continue
+    }
+    if (valid.has(s) && !out.includes(s)) out.push(s)
+  }
+  return out
 }
 
 function ItvEstadoMultiSelect({

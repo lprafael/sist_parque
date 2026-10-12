@@ -37,18 +37,24 @@ def _parse_estados_itv(estado_itv: Optional[str]) -> List[str]:
     return [p.strip().upper() for p in estado_itv.split(",") if p.strip()]
 
 
+def _expand_estados_itv(filtros: List[str]) -> List[str]:
+    """Normaliza filtros: APROBADO (planilla/dashboard) → VIGENTE+POR_VENCER+CRITICO."""
+    out: List[str] = []
+    for filtro in filtros:
+        if filtro == "APROBADO":
+            for k in ("VIGENTE", "POR_VENCER", "CRITICO"):
+                if k not in out:
+                    out.append(k)
+        elif filtro not in out:
+            out.append(filtro)
+    return out
+
+
 def _coincide_estado_itv(estado: str, filtros: List[str]) -> bool:
     """True si el estado del bus coincide con alguno de los filtros (OR)."""
     if not filtros:
         return True
-    for filtro in filtros:
-        # APROBADO = planilla (fecha >= hoy): VIGENTE + POR_VENCER + CRITICO
-        if filtro == "APROBADO":
-            if estado in ("VIGENTE", "POR_VENCER", "CRITICO"):
-                return True
-        elif estado == filtro:
-            return True
-    return False
+    return estado in _expand_estados_itv(filtros)
 
 
 @router.get("", response_model=dict)

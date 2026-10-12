@@ -81,6 +81,8 @@ export const itvApi = {
   registrar: (data: unknown) => api.post('/itv', data),
   actualizar: (id: number, data: unknown) => api.put(`/itv/${id}`, data),
   historialBus: (id_bus: number) => api.get(`/itv/historial/${id_bus}`),
+  descargarExcel: (params?: Record<string, string | number | boolean>) =>
+    api.get('/itv/excel', { params, responseType: 'blob', timeout: 180000 }),
 }
 
 // ── Seguros ───────────────────────────────────────

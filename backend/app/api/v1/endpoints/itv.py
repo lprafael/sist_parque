@@ -1,12 +1,18 @@
+import io
 from datetime import date
 from typing import Optional
+
+import openpyxl
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, update
+from sqlalchemy import select, func, and_, update, or_
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
-from app.models import ItvBus, Bus
+from app.models import ItvBus, Bus, Eot
 from app.services.sistema_logs import registrar_auditoria
 from app.schemas import ItvBusCreate, ItvBusUpdate, ItvBusOut, HistorialItvOut
 
@@ -67,6 +73,164 @@ async def listar_itv(
         ))
 
     return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+
+@router.get("/excel")
+async def exportar_itv_excel(
+    estado: Optional[str] = Query(None, description="Filtrar por estado ITV: VIGENTE, POR_VENCER, CRITICO, VENCIDO"),
+    search: Optional[str] = Query(None, description="Buscar por RUA o N° certificado"),
+    solo_vigentes: bool = Query(True, description="Si es True, sólo exporta registros ITV vigentes"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """Genera un Excel con el listado de ITV (RUA, fechas, estado, certificado, empresa)."""
+    q = (
+        select(ItvBus)
+        .options(
+            selectinload(ItvBus.bus).selectinload(Bus.asignaciones),
+        )
+    )
+    filters = []
+    if solo_vigentes:
+        filters.append(ItvBus.es_vigente == True)
+    if search:
+        term = f"%{search.strip()}%"
+        q = q.join(Bus, Bus.id_bus == ItvBus.id_bus)
+        filters.append(
+            or_(
+                Bus.rua.ilike(term),
+                ItvBus.numero_certificado.ilike(term),
+            )
+        )
+    if filters:
+        q = q.where(and_(*filters))
+
+    q = q.order_by(ItvBus.fecha_vencimiento.asc())
+    itv_list = (await db.execute(q)).scalars().unique().all()
+
+    eot_ids = set()
+    for itv in itv_list:
+        bus = itv.bus
+        if not bus:
+            continue
+        for a in bus.asignaciones:
+            if a.fecha_fin_asignacion is None:
+                eot_ids.add(a.id_eot)
+
+    eot_nombres: dict[str, str] = {}
+    if eot_ids:
+        eot_rows = (
+            await db.execute(
+                select(Eot.id_eot_vmt_hex, Eot.eot_nombre).where(Eot.id_eot_vmt_hex.in_(eot_ids))
+            )
+        ).all()
+        eot_nombres = {r[0]: r[1] for r in eot_rows}
+
+    estado_filtro = estado.upper() if estado else None
+    rows = []
+    for itv in itv_list:
+        est, dias = estado_itv(itv.fecha_vencimiento)
+        if estado_filtro and est != estado_filtro:
+            continue
+        bus = itv.bus
+        asig = next((a for a in (bus.asignaciones if bus else []) if a.fecha_fin_asignacion is None), None)
+        empresa = "-"
+        if asig:
+            empresa = eot_nombres.get(asig.id_eot) or asig.id_eot or "-"
+        rows.append({
+            "rua": bus.rua if bus else "-",
+            "numero_orden": bus.numero_orden if bus and bus.numero_orden is not None else "-",
+            "empresa": empresa,
+            "estado_bus": bus.estado_bus if bus else "-",
+            "fecha_itv": itv.fecha_itv,
+            "fecha_vencimiento": itv.fecha_vencimiento,
+            "dias_para_vencer": dias if dias is not None else "-",
+            "estado_itv": est,
+            "resultado_itv": itv.resultado_itv or "-",
+            "centro_itv": itv.centro_itv or "-",
+            "numero_certificado": itv.numero_certificado or "-",
+            "observaciones": itv.observaciones or "-",
+            "es_vigente": "Sí" if itv.es_vigente else "No",
+        })
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "ITV"
+
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    align_center = Alignment(horizontal="center", vertical="center")
+    border_thin = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1"),
+    )
+    estado_fills = {
+        "VIGENTE": PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid"),
+        "POR_VENCER": PatternFill(start_color="FEF9C3", end_color="FEF9C3", fill_type="solid"),
+        "CRITICO": PatternFill(start_color="FFEDD5", end_color="FFEDD5", fill_type="solid"),
+        "VENCIDO": PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid"),
+    }
+
+    headers = [
+        ("rua", "RUA / Placa"),
+        ("numero_orden", "N° Orden"),
+        ("empresa", "Empresa"),
+        ("estado_bus", "Estado Bus"),
+        ("fecha_itv", "Fecha ITV"),
+        ("fecha_vencimiento", "Fecha Vencimiento"),
+        ("dias_para_vencer", "Días p/ vencer"),
+        ("estado_itv", "Estado ITV"),
+        ("resultado_itv", "Resultado"),
+        ("centro_itv", "Centro ITV"),
+        ("numero_certificado", "N° Certificado"),
+        ("es_vigente", "Registro vigente"),
+        ("observaciones", "Observaciones"),
+    ]
+
+    for col_num, (_, label) in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col_num, value=label)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = align_center
+        cell.border = border_thin
+
+    for row_idx, row_data in enumerate(rows, start=2):
+        for col_num, (key, _) in enumerate(headers, start=1):
+            val = row_data[key]
+            if hasattr(val, "isoformat"):
+                val = val.isoformat()
+            cell = ws.cell(row=row_idx, column=col_num, value=val)
+            cell.border = border_thin
+            cell.alignment = align_center
+            if key == "estado_itv":
+                fill = estado_fills.get(str(val))
+                if fill:
+                    cell.fill = fill
+
+    for col_idx in range(1, len(headers) + 1):
+        max_len = 0
+        for row_idx in range(1, (ws.max_row or 1) + 1):
+            cell = ws.cell(row=row_idx, column=col_idx)
+            if cell.value is not None:
+                max_len = max(max_len, len(str(cell.value)))
+        col_letter = openpyxl.utils.get_column_letter(col_idx)
+        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    ws.auto_filter.ref = ws.dimensions
+    ws.freeze_panes = "A2"
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    fecha = date.today().isoformat()
+    return StreamingResponse(
+        stream,
+        headers={"Content-Disposition": f'attachment; filename="Reporte_ITV_{fecha}.xlsx"'},
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @router.get("/{id_itv}", response_model=ItvBusOut)

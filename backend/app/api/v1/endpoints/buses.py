@@ -30,13 +30,37 @@ def calcular_estado_itv(vencimiento: Optional[date]) -> str:
     return "VIGENTE"
 
 
+def _parse_estados_itv(estado_itv: Optional[str]) -> List[str]:
+    """Acepta un valor o varios separados por coma (p. ej. VIGENTE,CRITICO)."""
+    if not estado_itv or not estado_itv.strip():
+        return []
+    return [p.strip().upper() for p in estado_itv.split(",") if p.strip()]
+
+
+def _coincide_estado_itv(estado: str, filtros: List[str]) -> bool:
+    """True si el estado del bus coincide con alguno de los filtros (OR)."""
+    if not filtros:
+        return True
+    for filtro in filtros:
+        # APROBADO = planilla (fecha >= hoy): VIGENTE + POR_VENCER + CRITICO
+        if filtro == "APROBADO":
+            if estado in ("VIGENTE", "POR_VENCER", "CRITICO"):
+                return True
+        elif estado == filtro:
+            return True
+    return False
+
+
 @router.get("", response_model=dict)
 async def listar_buses(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     estado_bus: Optional[str] = None,
-    estado_itv: Optional[str] = None,
+    estado_itv: Optional[str] = Query(
+        None,
+        description="Uno o más estados ITV separados por coma: APROBADO,VIGENTE,POR_VENCER,CRITICO,VENCIDO,SIN_ITV",
+    ),
     id_marca: Optional[int] = None,
     id_tipo_servicio: Optional[int] = None,
     tiene_rampa: Optional[bool] = None,
@@ -104,11 +128,16 @@ async def listar_buses(
     if filters:
         q = q.where(and_(*filters))
 
-    total_q = select(func.count()).select_from(q.subquery())
-    total = (await db.execute(total_q)).scalar()
-
-    q = q.offset((page - 1) * page_size).limit(page_size).order_by(Bus.numero_orden)
-    buses = (await db.execute(q)).scalars().all()
+    estados_itv = _parse_estados_itv(estado_itv)
+    # Si hay filtro ITV, hay que evaluar el estado calculado antes de paginar
+    if estados_itv:
+        q = q.order_by(Bus.numero_orden)
+        buses = (await db.execute(q)).scalars().all()
+    else:
+        total_q = select(func.count()).select_from(q.subquery())
+        total = (await db.execute(total_q)).scalar()
+        q = q.offset((page - 1) * page_size).limit(page_size).order_by(Bus.numero_orden)
+        buses = (await db.execute(q)).scalars().all()
 
     # Enriquecer con ITV y Nombre de Empresa
     items = []
@@ -135,16 +164,14 @@ async def listar_buses(
             empresa_nombre = (await db.execute(emp_q_raw)).scalar_one_or_none()
 
         venc = itv.fecha_vencimiento if itv else None
-        estado = calcular_estado_itv(venc)
+        # Sin registro ITV → SIN_ITV; con registro pero sin fecha → VENCIDO (planilla)
+        if itv is None:
+            estado = "SIN_ITV"
+        else:
+            estado = calcular_estado_itv(venc)
 
-        if estado_itv:
-            filtro = estado_itv.upper()
-            # APROBADO = planilla (fecha >= hoy): VIGENTE + POR_VENCER + CRITICO
-            if filtro == "APROBADO":
-                if estado == "VENCIDO":
-                    continue
-            elif estado != filtro:
-                continue
+        if not _coincide_estado_itv(estado, estados_itv):
+            continue
 
         out = BusOut(
             id_bus=bus.id_bus,
@@ -173,6 +200,11 @@ async def listar_buses(
             itv_estado=estado,
         )
         items.append(out)
+
+    if estados_itv:
+        total = len(items)
+        start = (page - 1) * page_size
+        items = items[start:start + page_size]
 
     return {"total": total, "page": page, "page_size": page_size, "items": items}
 

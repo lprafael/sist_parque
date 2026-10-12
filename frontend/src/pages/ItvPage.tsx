@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { itvApi } from '../api'
-import { Search, RefreshCw, Plus, Edit2, Clock } from 'lucide-react'
+import { Search, RefreshCw, Plus, Edit2, Clock, Download } from 'lucide-react'
 import ItvModal from '../components/itv/ItvModal'
 import ItvHistoryModal from '../components/itv/ItvHistoryModal'
 import { useRol } from '../hooks/useRol'
@@ -10,6 +10,7 @@ export default function ItvPage() {
   const { puedeEditar } = useRol()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [downloading, setDownloading] = useState(false)
   const PAGE_SIZE = 20
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -33,6 +34,28 @@ export default function ItvPage() {
 
   const items = data?.data?.items ?? []
 
+  const handleDescargarExcel = async () => {
+    setDownloading(true)
+    try {
+      const response = await itvApi.descargarExcel({
+        ...(search && { search }),
+      })
+      const fecha = new Date().toISOString().slice(0, 10)
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `Reporte_ITV_${fecha}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      alert('Error al generar el reporte Excel. Intentá de nuevo.')
+    } finally {
+      setDownloading(false)
+    }
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -43,6 +66,14 @@ export default function ItvPage() {
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn btn-secondary btn-sm" onClick={() => refetch()}>
             <RefreshCw size={14} /> Actualizar
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleDescargarExcel}
+            disabled={downloading}
+          >
+            <Download size={14} />
+            {downloading ? 'Generando...' : 'Generar Excel'}
           </button>
           {puedeEditar && (
             <button className="btn btn-primary btn-sm" onClick={() => {

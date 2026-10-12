@@ -1,14 +1,110 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { busesApi, empresasApi, itvApi } from '../api'
-import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban, Hash, Shield } from 'lucide-react'
+import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban, Hash, Shield, ChevronDown } from 'lucide-react'
 import { useRol } from '../hooks/useRol'
 import BusModal from '../components/buses/BusModal'
 import BajaModal from '../components/buses/BajaModal'
 import ItvHistoryModal from '../components/itv/ItvHistoryModal'
 import ItvModal from '../components/itv/ItvModal'
 import SeguroHistoryModal from '../components/seguros/SeguroHistoryModal'
+
+const ITV_ESTADO_OPTIONS: { key: string; label: string }[] = [
+  { key: 'APROBADO', label: 'ITV Aprobado / Vigente' },
+  { key: 'VIGENTE', label: 'ITV Vigente (>30 días)' },
+  { key: 'POR_VENCER', label: 'Por Vencer' },
+  { key: 'CRITICO', label: 'Crítico' },
+  { key: 'VENCIDO', label: 'Vencido' },
+  { key: 'SIN_ITV', label: 'Sin ITV' },
+]
+
+function parseEstadosItv(raw: string): string[] {
+  if (!raw.trim()) return []
+  const valid = new Set(ITV_ESTADO_OPTIONS.map(o => o.key))
+  return raw
+    .split(',')
+    .map(s => s.trim().toUpperCase())
+    .filter(s => valid.has(s))
+}
+
+function ItvEstadoMultiSelect({
+  selected,
+  onChange,
+}: {
+  selected: string[]
+  onChange: (keys: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const toggle = (key: string) => {
+    if (selected.includes(key)) onChange(selected.filter(x => x !== key))
+    else onChange([...selected, key])
+  }
+
+  const label =
+    selected.length === 0
+      ? 'Todos los ITV'
+      : selected.length === 1
+        ? (ITV_ESTADO_OPTIONS.find(o => o.key === selected[0])?.label ?? '1 estado')
+        : `${selected.length} estados ITV`
+
+  return (
+    <div className="multi-select" ref={ref} style={{ width: '220px' }}>
+      <button
+        type="button"
+        className="form-control multi-select-trigger"
+        onClick={() => setOpen(o => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="multi-select-label">{label}</span>
+        <ChevronDown size={14} style={{ flexShrink: 0, opacity: 0.6 }} />
+      </button>
+
+      {open && (
+        <div className="multi-select-dropdown">
+          <div className="multi-select-actions">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => onChange([])}>
+              Todos
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => onChange(ITV_ESTADO_OPTIONS.map(o => o.key))}
+            >
+              Seleccionar todos
+            </button>
+          </div>
+          <div className="multi-select-list" role="listbox" aria-multiselectable="true">
+            {ITV_ESTADO_OPTIONS.map(o => {
+              const checked = selected.includes(o.key)
+              return (
+                <label key={o.key} className={`check-row ${checked ? 'is-checked' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(o.key)}
+                  />
+                  <span>{o.label}</span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function estadoBadge(estado: string) {
   const map: Record<string, string> = {
@@ -34,11 +130,12 @@ export default function BusesPage() {
   const estadoItvParam = searchParams.get('estado_itv') ?? ''
   const tipoServicioParam = searchParams.get('id_tipo_servicio') ?? ''
   const tieneRampaParam = searchParams.get('tiene_rampa') ?? ''
+  const estadoItvFromUrl = useMemo(() => parseEstadosItv(estadoItvParam), [estadoItvParam])
 
   const [search, setSearch]           = useState('')
   const [page, setPage]               = useState(1)
   const [estadoBus, setEstadoBus]     = useState(estadoBusParam)
-  const [estadoItv, setEstadoItv]     = useState(estadoItvParam)
+  const [estadoItv, setEstadoItv]     = useState<string[]>(estadoItvFromUrl)
   const [empresa, setEmpresa]         = useState(empresaParam)
   const [tipoServicio, setTipoServicio] = useState(tipoServicioParam)
   const [tieneRampa, setTieneRampa]   = useState(tieneRampaParam)
@@ -78,11 +175,11 @@ export default function BusesPage() {
   useEffect(() => {
     setEmpresa(empresaParam)
     setEstadoBus(estadoBusParam)
-    setEstadoItv(estadoItvParam)
+    setEstadoItv(estadoItvFromUrl)
     setTipoServicio(tipoServicioParam)
     setTieneRampa(tieneRampaParam)
     setPage(1)
-  }, [empresaParam, estadoBusParam, estadoItvParam, tipoServicioParam, tieneRampaParam])
+  }, [empresaParam, estadoBusParam, estadoItvFromUrl, tipoServicioParam, tieneRampaParam])
 
   // Catálogo de empresas permisionarias para el dropdown de filtro
   const { data: empresasData } = useQuery<{ data: { items: any[] } }>({
@@ -112,13 +209,15 @@ export default function BusesPage() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const estadoItvParamApi = estadoItv.join(',')
+
   const { data, isLoading, refetch } = useQuery<{ data: { items: any[]; total: number } }>({
-    queryKey: ['buses', page, search, estadoBus, estadoItv, empresa, tipoServicio, tieneRampa, ordenFiltro, ordenModo],
+    queryKey: ['buses', page, search, estadoBus, estadoItvParamApi, empresa, tipoServicio, tieneRampa, ordenFiltro, ordenModo],
     queryFn: () => busesApi.listar({
       page, page_size: PAGE_SIZE,
       ...(search        && { search }),
       ...(estadoBus     && { estado_bus: estadoBus }),
-      ...(estadoItv     && { estado_itv: estadoItv }),
+      ...(estadoItvParamApi && { estado_itv: estadoItvParamApi }),
       ...(empresa       && { empresa }),
       ...(tipoServicio  && { id_tipo_servicio: Number(tipoServicio) }),
       ...(tieneRampa === 'true' || tieneRampa === 'false'
@@ -141,7 +240,7 @@ export default function BusesPage() {
   const syncParams = (next: {
     empresa?: string
     estado_bus?: string
-    estado_itv?: string
+    estado_itv?: string[]
     id_tipo_servicio?: string
     tiene_rampa?: string
   }) => {
@@ -153,10 +252,16 @@ export default function BusesPage() {
     const tr = next.tiene_rampa !== undefined ? next.tiene_rampa : tieneRampa
     if (emp) p.set('empresa', emp)
     if (eb) p.set('estado_bus', eb)
-    if (ei) p.set('estado_itv', ei)
+    if (ei.length) p.set('estado_itv', ei.join(','))
     if (ts) p.set('id_tipo_servicio', ts)
     if (tr === 'true' || tr === 'false') p.set('tiene_rampa', tr)
     setSearchParams(p)
+  }
+
+  const handleEstadoItvChange = (keys: string[]) => {
+    setEstadoItv(keys)
+    setPage(1)
+    syncParams({ estado_itv: keys })
   }
 
   const handleEmpresaChange = (val: string) => {
@@ -375,21 +480,10 @@ export default function BusesPage() {
             <option value="BAJA">Baja</option>
             <option value="INACTIVO">Inactivo</option>
           </select>
-          <select className="form-control" style={{ width: '180px' }}
-            value={estadoItv} onChange={e => {
-              const val = e.target.value
-              setEstadoItv(val)
-              setPage(1)
-              syncParams({ estado_itv: val })
-            }}>
-            <option value="">Todos los ITV</option>
-            <option value="APROBADO">ITV Aprobado / Vigente</option>
-            <option value="VIGENTE">ITV Vigente (&gt;30 días)</option>
-            <option value="POR_VENCER">Por Vencer</option>
-            <option value="CRITICO">Crítico</option>
-            <option value="VENCIDO">Vencido</option>
-            <option value="SIN_ITV">Sin ITV</option>
-          </select>
+          <ItvEstadoMultiSelect
+            selected={estadoItv}
+            onChange={handleEstadoItvChange}
+          />
           <select className="form-control" style={{ width: '190px' }}
             value={tipoServicio} onChange={e => {
               const val = e.target.value

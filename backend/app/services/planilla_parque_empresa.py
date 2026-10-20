@@ -403,22 +403,21 @@ def _pie_comun_izq(
     res_dec: int,
     total_declarado: int,
 ) -> list[list[Any]]:
-    """Bloque izquierdo del pie (autorizado / operativo / declarado)."""
+    """Bloque izquierdo del pie (autorizado / operativo / declarado).
+
+    EMPRESA-LINEA no se rellena aquí: solo va en filas de buses.
+    """
+    _ = empresa_linea  # firmado por el caller; no se usa en el pie
     C_D, C_E, C_F, C_G, C_I = 3, 4, 5, 6, 8
-    C_EMP = ncols - 1
     filas: list[list[Any]] = []
 
-    pie1 = _fila_vacia(ncols)
-    _cel(pie1, 11 if ncols > 12 else 10, empresa_linea)
-    _cel(pie1, C_EMP, empresa_linea)
-    filas.append(pie1)
+    filas.append(_fila_vacia(ncols))
 
     pie2 = _fila_vacia(ncols)
     _cel(pie2, C_D, "ACTUALIZACIÓN:")
     _cel(pie2, C_E, hoy)
     _cel(pie2, C_F, "POD")
     _cel(pie2, C_G, "Parque Operativo Declarado")
-    _cel(pie2, C_EMP, empresa_linea)
     filas.append(pie2)
 
     pie3 = _fila_vacia(ncols)
@@ -426,13 +425,10 @@ def _pie_comun_izq(
     _cel(pie3, C_E, hoy)
     _cel(pie3, C_F, "RTD")
     _cel(pie3, C_G, "Reserva Técnica Declarada")
-    _cel(pie3, C_EMP, empresa_linea)
     filas.append(pie3)
 
-    # Fila vacía de fechas mes (operativa la completa; empresa deja empresa-linea)
-    pie4 = _fila_vacia(ncols)
-    _cel(pie4, C_EMP, empresa_linea)
-    filas.append(pie4)
+    # Fila vacía de fechas mes (operativa la completa aquí)
+    filas.append(_fila_vacia(ncols))
 
     resol = "según Resolución GVMT N° 44/2025 es de: "
     for label, val in [
@@ -444,7 +440,6 @@ def _pie_comun_izq(
         _cel(r, C_F, label)
         _cel(r, C_G, val)
         _cel(r, C_I, "buses")
-        _cel(r, C_EMP, empresa_linea)
         filas.append(r)
 
     pie_op = _fila_vacia(ncols)
@@ -452,14 +447,12 @@ def _pie_comun_izq(
     _cel(pie_op, C_G, op_dec)
     _cel(pie_op, 7, "Declarado")
     _cel(pie_op, C_I, "buses")
-    _cel(pie_op, C_EMP, empresa_linea)
     filas.append(pie_op)
 
     pie_rt = _fila_vacia(ncols)
     _cel(pie_rt, C_F, "Reserva Técnica Declarada:")
     _cel(pie_rt, C_G, res_dec)
     _cel(pie_rt, 7, total_declarado)
-    _cel(pie_rt, C_EMP, empresa_linea)
     filas.append(pie_rt)
 
     return filas
@@ -542,7 +535,6 @@ def _armar_filas_hoja(
         autoriz, operat, reserva, op_dec, res_dec, total_dec,
     )
 
-    C_EMP = ncols - 1
     C_M = 12 if ncols > 13 else 11
 
     if modo == "operativa":
@@ -576,9 +568,7 @@ def _armar_filas_hoja(
             grid.append(r)
             row_kinds.append("footer")
 
-        pie_end = _fila_vacia(ncols)
-        _cel(pie_end, C_EMP, empresa_linea)
-        grid.append(pie_end)
+        grid.append(_fila_vacia(ncols))
         row_kinds.append("footer")
     else:
         # Planilla empresa: bloque derecho = resumen ITV

@@ -20,7 +20,9 @@ from app.services import planilla_viewer
 
 router = APIRouter(prefix="/reportes", tags=["Reportes"])
 
-LOGO_PATH = Path(__file__).resolve().parents[3] / "static" / "Logo-MOPC-VMT.png"
+_STATIC_DIR = Path(__file__).resolve().parents[3] / "static"
+LOGO_PATH = _STATIC_DIR / "Logo-MOPC-VMT.png"
+ENCABEZADO_PATH = _STATIC_DIR / "encabezado.png"
 
 # ── Campos exportables ─────────────────────────────────────
 CAMPOS: Dict[str, Dict[str, Any]] = {
@@ -107,6 +109,21 @@ def _calcular_resumenes(rows: List[Dict[str, Any]], keys: List[str]) -> List[tup
     return result
 
 
+def _add_encabezado_image(ws, height_px: int = 48) -> None:
+    """Inserta encabezado.png (o logo legacy) anclado en A1."""
+    logo = ENCABEZADO_PATH if ENCABEZADO_PATH.exists() else LOGO_PATH
+    if not logo.exists():
+        return
+    img = XLImage(str(logo))
+    if logo.name == "encabezado.png":
+        img.height = height_px
+        img.width = int(height_px * 1918 / 121)
+    else:
+        img.width = 520
+        img.height = 43
+    ws.add_image(img, "A1")
+
+
 def _insertar_logo(ws) -> int:
     """Inserta el logo institucional como encabezado. Retorna la fila donde empieza el contenido."""
     # Filas 1-3 reservadas para logo + título
@@ -118,12 +135,7 @@ def _insertar_logo(ws) -> int:
     title_cell.alignment = Alignment(horizontal="left", vertical="center")
     ws.row_dimensions[3].height = 22
 
-    if LOGO_PATH.exists():
-        img = XLImage(str(LOGO_PATH))
-        # Logo original ~1986x163 → mantener proporción
-        img.width = 520
-        img.height = 43
-        ws.add_image(img, "A1")
+    _add_encabezado_image(ws, height_px=48)
 
     return 5  # contenido a partir de la fila 5
 
@@ -761,9 +773,9 @@ def _escribir_hoja_planilla_parque(ws, data: dict) -> None:
                 except Exception:
                     pass
 
-    # Alturas
-    ws.row_dimensions[1].height = 18
-    ws.row_dimensions[2].height = 18
+    # Alturas (filas 1-2 = área logo / encabezado institucional)
+    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[2].height = 28
     ws.row_dimensions[3].height = 22
     ws.row_dimensions[4].height = 18
     ws.row_dimensions[5].height = 18
@@ -785,6 +797,9 @@ def _escribir_hoja_planilla_parque(ws, data: dict) -> None:
     # Columna F un poco más ancha para fecha título / etiquetas pie
     ws.column_dimensions["F"].width = max(ws.column_dimensions["F"].width or 0, 14)
     ws.column_dimensions["M"].width = max(ws.column_dimensions["M"].width or 0, 22)
+
+    # Logo institucional en A1 (área combinada filas 1-2)
+    _add_encabezado_image(ws, height_px=52)
 
 
 def _workbook_planillas_parque(planillas: list[dict]) -> openpyxl.Workbook:

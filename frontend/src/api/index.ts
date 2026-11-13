@@ -11,14 +11,21 @@ export const authApi = {
 }
 
 // ── Dashboard ─────────────────────────────────────
+type DashboardParams = { id_eot?: string }
+
 export const dashboardApi = {
-  kpis: () => api.get('/dashboard/kpis'),
-  vencimientosProximos: (dias = 30) =>
-    api.get(`/dashboard/vencimientos-proximos?dias=${dias}`),
-  distribucionEmpresas: () => api.get('/dashboard/distribucion-empresas'),
-  distribucionAntiguedad: () => api.get('/dashboard/distribucion-antiguedad'),
-  distribucionTipoServicio: () => api.get('/dashboard/distribucion-tipo-servicio'),
-  distribucionMarcas: () => api.get('/dashboard/distribucion-marcas'),
+  kpis: (params?: DashboardParams) =>
+    api.get('/dashboard/kpis', { params }),
+  vencimientosProximos: (dias = 30, params?: DashboardParams) =>
+    api.get('/dashboard/vencimientos-proximos', { params: { dias, ...params } }),
+  distribucionEmpresas: (params?: DashboardParams) =>
+    api.get('/dashboard/distribucion-empresas', { params }),
+  distribucionAntiguedad: (params?: DashboardParams) =>
+    api.get('/dashboard/distribucion-antiguedad', { params }),
+  distribucionTipoServicio: (params?: DashboardParams) =>
+    api.get('/dashboard/distribucion-tipo-servicio', { params }),
+  distribucionMarcas: (params?: DashboardParams) =>
+    api.get('/dashboard/distribucion-marcas', { params }),
 }
 
 

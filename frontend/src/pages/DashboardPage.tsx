@@ -1,7 +1,8 @@
+import { useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import { dashboardApi, alertasApi } from '../api'
-import { Trash2 } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { dashboardApi, alertasApi, empresasApi } from '../api'
+import { Trash2, Building2 } from 'lucide-react'
 import { useRol } from '../hooks/useRol'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -102,10 +103,43 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export default function DashboardPage() {
   const { puedeEditar } = useRol()
   const qc = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const idEot = searchParams.get('empresa') || ''
+
+  const dashParams = useMemo(
+    () => (idEot ? { id_eot: idEot } : undefined),
+    [idEot],
+  )
+
+  const busesQs = (extra = '') => {
+    const parts = [extra, idEot ? `empresa=${encodeURIComponent(idEot)}` : '']
+      .filter(Boolean)
+      .join('&')
+    return parts ? `/buses?${parts}` : '/buses'
+  }
+
+  const { data: empresasListaResp } = useQuery({
+    queryKey: ['empresas-filtro-dashboard'],
+    queryFn: () =>
+      empresasApi.listar({
+        page: 1,
+        page_size: 200,
+        solo_activas: true,
+        solo_permisionarias: true,
+      }),
+  })
+  const empresasLista = empresasListaResp?.data?.items ?? []
+
+  const handleEmpresaChange = (value: string) => {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set('empresa', value)
+    else next.delete('empresa')
+    setSearchParams(next, { replace: true })
+  }
 
   const { data: kpisResp, isLoading: kLoading } = useQuery({
-    queryKey: ['kpis'],
-    queryFn: () => dashboardApi.kpis(),
+    queryKey: ['kpis', idEot],
+    queryFn: () => dashboardApi.kpis(dashParams),
     refetchInterval: 300000,
   })
 
@@ -124,28 +158,28 @@ export default function DashboardPage() {
   }
 
   const { data: vencResp } = useQuery({
-    queryKey: ['vencimientos', 30],
-    queryFn: () => dashboardApi.vencimientosProximos(30),
+    queryKey: ['vencimientos', 30, idEot],
+    queryFn: () => dashboardApi.vencimientosProximos(30, dashParams),
   })
 
   const { data: empResp } = useQuery({
-    queryKey: ['distribucion-empresas'],
-    queryFn: () => dashboardApi.distribucionEmpresas(),
+    queryKey: ['distribucion-empresas', idEot],
+    queryFn: () => dashboardApi.distribucionEmpresas(dashParams),
   })
 
   const { data: antResp } = useQuery({
-    queryKey: ['distribucion-antiguedad'],
-    queryFn: () => dashboardApi.distribucionAntiguedad(),
+    queryKey: ['distribucion-antiguedad', idEot],
+    queryFn: () => dashboardApi.distribucionAntiguedad(dashParams),
   })
 
   const { data: tipoServicioResp } = useQuery({
-    queryKey: ['distribucion-tipo-servicio'],
-    queryFn: () => dashboardApi.distribucionTipoServicio(),
+    queryKey: ['distribucion-tipo-servicio', idEot],
+    queryFn: () => dashboardApi.distribucionTipoServicio(dashParams),
   })
 
   const { data: marcasResp } = useQuery({
-    queryKey: ['distribucion-marcas'],
-    queryFn: () => dashboardApi.distribucionMarcas(),
+    queryKey: ['distribucion-marcas', idEot],
+    queryFn: () => dashboardApi.distribucionMarcas(dashParams),
   })
 
   const kpis = kpisResp?.data
@@ -155,6 +189,10 @@ export default function DashboardPage() {
   const promedioEdad = antResp?.data?.promedio_edad ?? 0
   const tipoServicioData = tipoServicioResp?.data ?? []
   const marcasData = marcasResp?.data ?? []
+
+  const empresaSeleccionada = empresasLista.find(
+    (e: any) => e.id_eot_vmt_hex === idEot,
+  )
 
   // Agrupar vencimientos por tipo para gráfico de área
   const vencByDia = vencimientos.reduce((acc: Record<string, any>, item: any) => {
@@ -172,6 +210,40 @@ export default function DashboardPage() {
 
   return (
     <div>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          marginBottom: '20px',
+        }}
+      >
+        <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          {empresaSeleccionada
+            ? `Mostrando indicadores de ${empresaSeleccionada.eot_nombre}`
+            : 'Mostrando indicadores de todas las empresas EOT'}
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Building2 size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+          <select
+            className="form-control"
+            style={{ minWidth: '240px', maxWidth: '360px' }}
+            value={idEot}
+            onChange={(e) => handleEmpresaChange(e.target.value)}
+            aria-label="Filtrar por empresa EOT"
+          >
+            <option value="">Todas las empresas</option>
+            {empresasLista.map((e: any) => (
+              <option key={e.eot_id ?? e.id_eot_vmt_hex} value={e.id_eot_vmt_hex}>
+                {e.eot_nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* KPIs */}
       <div className="kpi-grid">
         <KpiCard
@@ -179,42 +251,48 @@ export default function DashboardPage() {
           label="Total Buses"
           icon="🚌"
           color="blue"
-          to="/buses"
+          to={busesQs()}
         />
         <KpiCard
           value={kpis?.buses_activos ?? 0}
           label="Buses Activos"
           icon="✅"
           color="green"
-          to="/buses?estado_bus=ACTIVO"
+          to={busesQs('estado_bus=ACTIVO')}
         />
         <ParqueSplitCard
           items={[
             {
               value: kpis?.buses_convencional ?? 0,
               label: 'Convencional',
-              to: kpis?.id_tipo_convencional
-                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_convencional}`
-                : '/buses?estado_bus=ACTIVO',
+              to: busesQs(
+                kpis?.id_tipo_convencional
+                  ? `estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_convencional}`
+                  : 'estado_bus=ACTIVO',
+              ),
             },
             {
               value: kpis?.buses_diferenciado ?? 0,
               label: 'Diferenciado',
-              to: kpis?.id_tipo_diferenciado
-                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_diferenciado}`
-                : '/buses?estado_bus=ACTIVO',
+              to: busesQs(
+                kpis?.id_tipo_diferenciado
+                  ? `estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_diferenciado}`
+                  : 'estado_bus=ACTIVO',
+              ),
             },
             {
               value: kpis?.buses_electrico ?? 0,
               label: 'Eléctrico',
-              to: kpis?.id_tipo_electrico
-                ? `/buses?estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_electrico}`
-                : '/buses?estado_bus=ACTIVO',
+              to: busesQs(
+                kpis?.id_tipo_electrico
+                  ? `estado_bus=ACTIVO&id_tipo_servicio=${kpis.id_tipo_electrico}`
+                  : 'estado_bus=ACTIVO',
+              ),
             },
             {
               value: kpis?.buses_con_rampa ?? 0,
               label: 'Con rampa',
-              to: '/buses?estado_bus=ACTIVO&tiene_rampa=true',
+              to: busesQs('estado_bus=ACTIVO&tiene_rampa=true'),
             },
           ]}
         />
@@ -223,7 +301,7 @@ export default function DashboardPage() {
           label="ITV Vigentes"
           icon="🔧"
           color="cyan"
-          to="/buses?estado_itv=APROBADO"
+          to={busesQs('estado_itv=APROBADO')}
           hint="Aprobadas (incluye por vencer)"
         />
         <KpiCard
@@ -231,14 +309,14 @@ export default function DashboardPage() {
           label="ITV Por Vencer"
           icon="⚠️"
           color="amber"
-          to="/buses?estado_itv=POR_VENCER"
+          to={busesQs('estado_itv=POR_VENCER')}
         />
         <KpiCard
           value={kpis?.itv_vencido ?? 0}
           label="ITV Vencidas"
           icon="❌"
           color="red"
-          to="/buses?estado_itv=VENCIDO"
+          to={busesQs('estado_itv=VENCIDO')}
           hint={
             (kpis?.itv_sin_vigente ?? 0) > 0
               ? `${kpis.itv_sin_vigente} sin ITV vigente`

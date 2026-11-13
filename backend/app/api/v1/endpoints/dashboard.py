@@ -1,7 +1,9 @@
 from datetime import date, timedelta
-from fastapi import APIRouter, Depends
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, or_, text
+from sqlalchemy import select, func, and_
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -10,42 +12,69 @@ from app.schemas import KpiDashboard
 
 router = APIRouter(prefix="/dashboard", tags=["Dashboard & KPIs"])
 
-HOY = date.today
+
+def _buses_ids_de_eot(id_eot: str):
+    """Subquery de buses con asignación vigente a la EOT."""
+    return (
+        select(BusEmpresa.id_bus)
+        .where(
+            BusEmpresa.fecha_fin_asignacion.is_(None),
+            BusEmpresa.id_eot == id_eot,
+        )
+    )
+
+
+def _bus_filter(id_eot: Optional[str]):
+    """Condición opcional: Bus.id_bus ∈ asignación vigente de la EOT."""
+    if not id_eot:
+        return None
+    return Bus.id_bus.in_(_buses_ids_de_eot(id_eot))
 
 
 @router.get("/kpis", response_model=KpiDashboard)
 async def obtener_kpis(
+    id_eot: Optional[str] = Query(None, description="Filtrar por id_eot_vmt_hex de la empresa"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
     hoy = date.today()
     en_30 = hoy + timedelta(days=30)
+    bus_f = _bus_filter(id_eot)
 
     # Buses
-    total_buses   = (await db.execute(select(func.count()).select_from(Bus))).scalar()
-    buses_activos = (await db.execute(select(func.count()).select_from(Bus).where(Bus.estado_bus == "ACTIVO"))).scalar()
-
-
+    total_q = select(func.count()).select_from(Bus)
+    activos_q = select(func.count()).select_from(Bus).where(Bus.estado_bus == "ACTIVO")
+    if bus_f is not None:
+        total_q = total_q.where(bus_f)
+        activos_q = activos_q.where(bus_f)
+    total_buses = (await db.execute(total_q)).scalar()
+    buses_activos = (await db.execute(activos_q)).scalar()
 
     # ITV — alineado a planilla: APROBADA = fecha >= hoy; VENCIDA = fecha < hoy o sin ITV.
     # itv_vigente (= APROBADA) incluye "por vencer" (igual que seguros vigentes).
     # itv_por_vencer es subconjunto (vence en ≤30 días).
+    itv_base = [ItvBus.es_vigente == True]
+    if bus_f is not None:
+        itv_base.append(ItvBus.id_bus.in_(_buses_ids_de_eot(id_eot)))
+
     itv_vigente = (await db.execute(select(func.count()).select_from(ItvBus).where(
-        and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento >= hoy)
+        and_(*itv_base, ItvBus.fecha_vencimiento >= hoy)
     ))).scalar() or 0
     itv_por_vencer = (await db.execute(select(func.count()).select_from(ItvBus).where(
-        and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento >= hoy, ItvBus.fecha_vencimiento <= en_30)
+        and_(*itv_base, ItvBus.fecha_vencimiento >= hoy, ItvBus.fecha_vencimiento <= en_30)
     ))).scalar() or 0
     itv_vencido_fecha = (await db.execute(select(func.count()).select_from(ItvBus).where(
-        and_(ItvBus.es_vigente == True, ItvBus.fecha_vencimiento < hoy)
+        and_(*itv_base, ItvBus.fecha_vencimiento < hoy)
     ))).scalar() or 0
+
+    sin_itv_conds = [
+        Bus.estado_bus == "ACTIVO",
+        ~Bus.id_bus.in_(select(ItvBus.id_bus).where(ItvBus.es_vigente == True)),
+    ]
+    if bus_f is not None:
+        sin_itv_conds.append(bus_f)
     itv_sin_fecha = (await db.execute(
-        select(func.count()).select_from(Bus).where(
-            and_(
-                Bus.estado_bus == "ACTIVO",
-                ~Bus.id_bus.in_(select(ItvBus.id_bus).where(ItvBus.es_vigente == True)),
-            )
-        )
+        select(func.count()).select_from(Bus).where(and_(*sin_itv_conds))
     )).scalar() or 0
     itv_vencido = itv_vencido_fecha + itv_sin_fecha
 
@@ -56,12 +85,15 @@ async def obtener_kpis(
         tipo_id_sq = select(TipoSeguro.id_tipo_seguro).where(
             func.upper(TipoSeguro.nombre) == nombre_tipo.upper()
         )
+        bus_activos_sq = select(Bus.id_bus).where(Bus.estado_bus == "ACTIVO")
+        if bus_f is not None:
+            bus_activos_sq = bus_activos_sq.where(bus_f)
         return (await db.execute(
             select(func.count()).select_from(SeguroBus).where(
                 and_(
                     SeguroBus.seguro_vigente.is_(True),
                     SeguroBus.id_tipo_seguro.in_(tipo_id_sq),
-                    SeguroBus.id_bus.in_(select(Bus.id_bus).where(Bus.estado_bus == "ACTIVO")),
+                    SeguroBus.id_bus.in_(bus_activos_sq),
                     *extra_conds,
                 )
             )
@@ -84,20 +116,41 @@ async def obtener_kpis(
     seg_ter_ven = await _count_seguro_tipo("TERCEROS", SeguroBus.fecha_vencimiento < hoy)
 
     # Alertas
-    alertas_criticas   = (await db.execute(select(func.count()).select_from(Alerta).where(
-        and_(Alerta.estado_alerta == "PENDIENTE", Alerta.prioridad == "ALTA")
-    ))).scalar()
-    alertas_pendientes = (await db.execute(select(func.count()).select_from(Alerta).where(Alerta.estado_alerta == "PENDIENTE"))).scalar()
+    alerta_conds_crit = [Alerta.estado_alerta == "PENDIENTE", Alerta.prioridad == "ALTA"]
+    alerta_conds_pend = [Alerta.estado_alerta == "PENDIENTE"]
+    if bus_f is not None:
+        alerta_conds_crit.append(Alerta.id_bus.in_(_buses_ids_de_eot(id_eot)))
+        alerta_conds_pend.append(Alerta.id_bus.in_(_buses_ids_de_eot(id_eot)))
 
-    # Empresas permisionarias activas
-    total_empresas = (await db.execute(select(func.count()).select_from(Eot).where(
-        and_(Eot.situacion == 1, Eot.permisionario == True)
+    alertas_criticas = (await db.execute(select(func.count()).select_from(Alerta).where(
+        and_(*alerta_conds_crit)
     ))).scalar()
+    alertas_pendientes = (await db.execute(select(func.count()).select_from(Alerta).where(
+        and_(*alerta_conds_pend)
+    ))).scalar()
+
+    # Empresas permisionarias activas (con filtro: 1 si la EOT existe y califica)
+    if id_eot:
+        total_empresas = (await db.execute(select(func.count()).select_from(Eot).where(
+            and_(
+                Eot.id_eot_vmt_hex == id_eot,
+                Eot.situacion == 1,
+                Eot.permisionario == True,
+            )
+        ))).scalar()
+    else:
+        total_empresas = (await db.execute(select(func.count()).select_from(Eot).where(
+            and_(Eot.situacion == 1, Eot.permisionario == True)
+        ))).scalar()
 
     # Parque: tipo de servicio + rampa (solo buses ACTIVO)
+    tipo_join_conds = [Bus.id_tipo_servicio == TipoServicio.id_tipo_servicio, Bus.estado_bus == "ACTIVO"]
+    if bus_f is not None:
+        tipo_join_conds.append(bus_f)
+
     tipo_rows = (await db.execute(
         select(TipoServicio.id_tipo_servicio, TipoServicio.nombre, func.count(Bus.id_bus))
-        .outerjoin(Bus, and_(Bus.id_tipo_servicio == TipoServicio.id_tipo_servicio, Bus.estado_bus == "ACTIVO"))
+        .outerjoin(Bus, and_(*tipo_join_conds))
         .where(TipoServicio.activo == True)
         .group_by(TipoServicio.id_tipo_servicio, TipoServicio.nombre)
     )).all()
@@ -111,10 +164,11 @@ async def obtener_kpis(
     id_dif, buses_diferenciado = tipo_map.get("DIFERENCIADO", (None, 0))
     id_elec, buses_electrico = tipo_map.get("ELECTRICO", (None, 0))
 
+    rampa_conds = [Bus.estado_bus == "ACTIVO", Bus.tiene_rampa.is_(True)]
+    if bus_f is not None:
+        rampa_conds.append(bus_f)
     buses_con_rampa = (await db.execute(
-        select(func.count()).select_from(Bus).where(
-            and_(Bus.estado_bus == "ACTIVO", Bus.tiene_rampa.is_(True))
-        )
+        select(func.count()).select_from(Bus).where(and_(*rampa_conds))
     )).scalar() or 0
 
     return KpiDashboard(
@@ -147,34 +201,40 @@ async def obtener_kpis(
 @router.get("/vencimientos-proximos")
 async def vencimientos_proximos(
     dias: int = 30,
+    id_eot: Optional[str] = Query(None, description="Filtrar por id_eot_vmt_hex de la empresa"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
     """Timeline de vencimientos en los próximos N días (ITV + seguros)."""
     hoy = date.today()
     limite = hoy + timedelta(days=dias)
+    bus_f = _bus_filter(id_eot)
 
-    # ITV
+    itv_conds = [ItvBus.fecha_vencimiento >= hoy, ItvBus.fecha_vencimiento <= limite]
+    if bus_f is not None:
+        itv_conds.append(bus_f)
+
     itv_q = await db.execute(
         select(ItvBus, Bus.rua, Bus.numero_orden)
         .join(Bus, Bus.id_bus == ItvBus.id_bus)
-        .where(and_(ItvBus.fecha_vencimiento >= hoy, ItvBus.fecha_vencimiento <= limite))
+        .where(and_(*itv_conds))
         .order_by(ItvBus.fecha_vencimiento)
     )
     itv_rows = itv_q.all()
 
-    # Seguros
+    seg_conds = [
+        SeguroBus.seguro_vigente == True,
+        SeguroBus.fecha_vencimiento >= hoy,
+        SeguroBus.fecha_vencimiento <= limite,
+    ]
+    if bus_f is not None:
+        seg_conds.append(bus_f)
+
     seg_q = await db.execute(
         select(SeguroBus, Bus.rua, Bus.numero_orden, TipoSeguro.nombre)
         .join(Bus, Bus.id_bus == SeguroBus.id_bus)
         .join(TipoSeguro, TipoSeguro.id_tipo_seguro == SeguroBus.id_tipo_seguro)
-        .where(
-            and_(
-                SeguroBus.seguro_vigente == True,
-                SeguroBus.fecha_vencimiento >= hoy,
-                SeguroBus.fecha_vencimiento <= limite,
-            )
-        )
+        .where(and_(*seg_conds))
         .order_by(SeguroBus.fecha_vencimiento)
     )
     seg_rows = seg_q.all()
@@ -209,28 +269,34 @@ async def vencimientos_proximos(
 
 @router.get("/distribucion-empresas")
 async def distribucion_por_empresa(
+    id_eot: Optional[str] = Query(None, description="Filtrar por id_eot_vmt_hex de la empresa"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
     """Cantidad de buses activos por empresa operadora."""
-    result = await db.execute(
+    q = (
         select(
             BusEmpresa.id_eot,
             func.count(BusEmpresa.id_bus).label("total_buses")
         )
         .where(BusEmpresa.fecha_fin_asignacion.is_(None))
-        .group_by(BusEmpresa.id_eot)
-        .order_by(func.count(BusEmpresa.id_bus).desc())
     )
+    if id_eot:
+        q = q.where(BusEmpresa.id_eot == id_eot)
+    q = q.group_by(BusEmpresa.id_eot).order_by(func.count(BusEmpresa.id_bus).desc())
+
+    result = await db.execute(q)
     rows = result.all()
 
     items = []
-    for id_eot, total in rows:
-        eot = (await db.execute(select(Eot.eot_nombre, Eot.eot_linea).where(Eot.id_eot_vmt_hex == id_eot))).one_or_none()
+    for eid, total in rows:
+        eot = (await db.execute(
+            select(Eot.eot_nombre, Eot.eot_linea).where(Eot.id_eot_vmt_hex == eid)
+        )).one_or_none()
         items.append({
-            "id_eot": id_eot,
-            "empresa": eot.eot_nombre if eot else id_eot,
-            "lineas": eot.eot_linea.strip() if eot else "",
+            "id_eot": eid,
+            "empresa": eot.eot_nombre if eot else eid,
+            "lineas": eot.eot_linea.strip() if eot and eot.eot_linea else "",
             "total_buses": total,
         })
     return items
@@ -238,15 +304,21 @@ async def distribucion_por_empresa(
 
 @router.get("/distribucion-antiguedad")
 async def distribucion_antiguedad_buses(
+    id_eot: Optional[str] = Query(None, description="Filtrar por id_eot_vmt_hex de la empresa"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
     """Distribución de buses por años de antigüedad y cálculo de la edad promedio."""
     current_year = date.today().year
+    bus_f = _bus_filter(id_eot)
+
+    conds = [Bus.estado_bus == "ACTIVO", Bus.año.isnot(None), Bus.año > 1970]
+    if bus_f is not None:
+        conds.append(bus_f)
 
     result = await db.execute(
         select(Bus.año, func.count(Bus.id_bus).label("cantidad"))
-        .where(and_(Bus.estado_bus == "ACTIVO", Bus.año.isnot(None), Bus.año > 1970))
+        .where(and_(*conds))
         .group_by(Bus.año)
         .order_by(Bus.año.asc())
     )
@@ -278,16 +350,20 @@ async def distribucion_antiguedad_buses(
 
 @router.get("/distribucion-tipo-servicio")
 async def distribucion_tipo_servicio(
+    id_eot: Optional[str] = Query(None, description="Filtrar por id_eot_vmt_hex de la empresa"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
     """Distribución de buses por Tipo de Servicio."""
-    from app.models import TipoServicio
+    bus_f = _bus_filter(id_eot)
+
+    join_conds = [Bus.id_tipo_servicio == TipoServicio.id_tipo_servicio, Bus.estado_bus == "ACTIVO"]
+    if bus_f is not None:
+        join_conds.append(bus_f)
 
     result = await db.execute(
         select(TipoServicio.nombre, func.count(Bus.id_bus).label("cantidad"))
-        .join(Bus, Bus.id_tipo_servicio == TipoServicio.id_tipo_servicio)
-        .where(Bus.estado_bus == "ACTIVO")
+        .join(Bus, and_(*join_conds))
         .group_by(TipoServicio.nombre)
     )
     rows = result.all()
@@ -299,11 +375,11 @@ async def distribucion_tipo_servicio(
             "value": cnt,
         })
 
+    sin_conds = [Bus.estado_bus == "ACTIVO", Bus.id_tipo_servicio.is_(None)]
+    if bus_f is not None:
+        sin_conds.append(bus_f)
     sin = (await db.execute(
-        select(func.count()).select_from(Bus).where(
-            Bus.estado_bus == "ACTIVO",
-            Bus.id_tipo_servicio.is_(None),
-        )
+        select(func.count()).select_from(Bus).where(*sin_conds)
     )).scalar() or 0
     if sin:
         items.append({"name": "SIN ESPECIFICAR", "value": sin})
@@ -313,16 +389,22 @@ async def distribucion_tipo_servicio(
 
 @router.get("/distribucion-marcas")
 async def distribucion_marcas(
+    id_eot: Optional[str] = Query(None, description="Filtrar por id_eot_vmt_hex de la empresa"),
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_user)
 ):
     """Distribución de buses por Marca (Top 10)."""
     from app.models import Marca
-    
+
+    bus_f = _bus_filter(id_eot)
+    conds = [Bus.estado_bus == "ACTIVO"]
+    if bus_f is not None:
+        conds.append(bus_f)
+
     result = await db.execute(
         select(Marca.nombre, func.count(Bus.id_bus).label("cantidad"))
         .join(Marca, Bus.id_marca == Marca.id_marca)
-        .where(Bus.estado_bus == "ACTIVO")
+        .where(and_(*conds))
         .group_by(Marca.nombre)
         .order_by(func.count(Bus.id_bus).desc())
         .limit(10)
@@ -337,4 +419,3 @@ async def distribucion_marcas(
         })
 
     return items
-

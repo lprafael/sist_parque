@@ -1,16 +1,89 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { dashboardApi, alertasApi, empresasApi } from '../api'
-import { Trash2, Building2 } from 'lucide-react'
+import { Trash2, Building2, Info, BookOpen, ChevronDown } from 'lucide-react'
 import { useRol } from '../hooks/useRol'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts'
 
+/** Diccionario de indicadores del dashboard (contexto de negocio). */
+const KPI_DICCIONARIO: { termino: string; grupo: string; definicion: string }[] = [
+  {
+    grupo: 'Buses',
+    termino: 'Total Buses',
+    definicion:
+      'Histórico completo del parque: incluye activos, inactivos y bajas. No representa el parque operativo del día.',
+  },
+  {
+    grupo: 'Buses',
+    termino: 'Buses Activos',
+    definicion:
+      'Vehículos con estado ACTIVO. Es el parque operativo de referencia para ITV, seguros y desglose por tipo de servicio.',
+  },
+  {
+    grupo: 'Buses',
+    termino: 'Parque (tipo / rampa)',
+    definicion:
+      'Desglose solo de buses ACTIVOS: convencional, diferenciado, eléctrico y con rampa de accesibilidad.',
+  },
+  {
+    grupo: 'ITV',
+    termino: 'ITV Vigentes',
+    definicion:
+      'Inspecciones con fecha de vencimiento ≥ hoy (equivalente a APROBADA en planilla). Incluye las que están por vencer en ≤30 días.',
+  },
+  {
+    grupo: 'ITV',
+    termino: 'ITV Por Vencer',
+    definicion:
+      'Subconjunto de las vigentes: ITV que vencen en los próximos 30 días. No se suma aparte al total de vigentes.',
+  },
+  {
+    grupo: 'ITV',
+    termino: 'ITV Vencidas',
+    definicion:
+      'Buses activos con ITV vencida o sin ITV vigente. Explica la diferencia con Buses Activos: Activos ≈ Vigentes + Vencidas.',
+  },
+  {
+    grupo: 'Seguros',
+    termino: 'Seguro Pasajeros / Terceros Vigentes',
+    definicion:
+      'Pólizas vigentes (fecha ≥ hoy) de buses ACTIVOS. “Por vencer” es un subconjunto de las vigentes (≤30 días).',
+  },
+  {
+    grupo: 'Seguros',
+    termino: 'Seguro Pasajeros / Terceros Vencidos',
+    definicion:
+      'Pólizas con fecha de vencimiento ya pasada, asociadas a buses ACTIVOS.',
+  },
+  {
+    grupo: 'Alertas',
+    termino: 'Alertas Pendientes',
+    definicion:
+      'Alertas del sistema aún no atendidas (vencimientos, documentación, etc.).',
+  },
+]
 
-function KpiCard({ value, label, icon, color, to, action, hint }: {
+function KpiInfo({ text }: { text: string }) {
+  return (
+    <span
+      className="kpi-info"
+      title={text}
+      aria-label={text}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+    >
+      <Info size={13} />
+    </span>
+  )
+}
+
+function KpiCard({ value, label, icon, color, to, action, hint, definition }: {
   value: number | string
   label: string
   icon: string
@@ -18,6 +91,7 @@ function KpiCard({ value, label, icon, color, to, action, hint }: {
   to?: string
   action?: React.ReactNode
   hint?: string
+  definition?: string
 }) {
   const inner = (
     <>
@@ -26,7 +100,10 @@ function KpiCard({ value, label, icon, color, to, action, hint }: {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
           <div>
             <div className="kpi-value">{value}</div>
-            <div className="kpi-label">{label}</div>
+            <div className="kpi-label">
+              {label}
+              {definition ? <KpiInfo text={definition} /> : null}
+            </div>
             {hint ? <div className="kpi-hint">{hint}</div> : null}
           </div>
           {action}
@@ -56,11 +133,18 @@ function KpiCard({ value, label, icon, color, to, action, hint }: {
 
 function ParqueSplitCard({
   items,
+  definition,
 }: {
   items: { value: number; label: string; to?: string }[]
+  definition?: string
 }) {
   return (
     <div className="kpi-card kpi-split-card">
+      {definition ? (
+        <div className="kpi-split-info">
+          <KpiInfo text={definition} />
+        </div>
+      ) : null}
       {items.map((item) => {
         const inner = (
           <>
@@ -85,6 +169,30 @@ function ParqueSplitCard({
   )
 }
 
+function KpiSection({
+  title,
+  note,
+  variant,
+  children,
+}: {
+  title: string
+  note?: string
+  variant: 'buses' | 'itv' | 'seguros' | 'alertas'
+  children: React.ReactNode
+}) {
+  return (
+    <section className="kpi-section">
+      <div className="kpi-section-header">
+        <h2 className="kpi-section-title">{title}</h2>
+        {note ? <p className="kpi-section-note">{note}</p> : null}
+      </div>
+      <div className={`kpi-grid kpi-grid-${variant}`}>
+        {children}
+      </div>
+    </section>
+  )
+}
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null
   return (
@@ -104,6 +212,7 @@ export default function DashboardPage() {
   const { puedeEditar } = useRol()
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [diccionarioAbierto, setDiccionarioAbierto] = useState(false)
   const idEot = searchParams.get('empresa') || ''
 
   const dashParams = useMemo(
@@ -217,7 +326,7 @@ export default function DashboardPage() {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: '12px',
-          marginBottom: '20px',
+          marginBottom: '16px',
         }}
       >
         <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -225,7 +334,24 @@ export default function DashboardPage() {
             ? `Mostrando indicadores de ${empresaSeleccionada.eot_nombre}`
             : 'Mostrando indicadores de todas las empresas EOT'}
         </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setDiccionarioAbierto((v) => !v)}
+            aria-expanded={diccionarioAbierto}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <BookOpen size={14} />
+            Diccionario
+            <ChevronDown
+              size={14}
+              style={{
+                transform: diccionarioAbierto ? 'rotate(180deg)' : undefined,
+                transition: 'transform 0.2s ease',
+              }}
+            />
+          </button>
           <Building2 size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
           <select
             className="form-control"
@@ -244,14 +370,50 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* KPIs */}
-      <div className="kpi-grid">
+      {diccionarioAbierto ? (
+        <div className="kpi-diccionario card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <span className="card-title">Diccionario de indicadores</span>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Cómo leer los valores del dashboard
+            </span>
+          </div>
+          <div className="kpi-diccionario-grid">
+            {KPI_DICCIONARIO.map((item) => (
+              <div key={item.termino} className="kpi-diccionario-item">
+                <div className="kpi-diccionario-grupo">{item.grupo}</div>
+                <div className="kpi-diccionario-termino">{item.termino}</div>
+                <p className="kpi-diccionario-def">{item.definicion}</p>
+              </div>
+            ))}
+          </div>
+          <div className="kpi-diccionario-relacion">
+            <strong>Relación clave:</strong>{' '}
+            Buses Activos ({kpis?.buses_activos ?? 0}) ≈ ITV Vigentes ({kpis?.itv_vigente ?? 0})
+            + ITV Vencidas ({kpis?.itv_vencido ?? 0}).
+            La diferencia entre activos e ITV vigentes son buses activos sin ITV al día
+            {(kpis?.itv_sin_vigente ?? 0) > 0
+              ? ` (incluye ${kpis.itv_sin_vigente} sin registro de ITV vigente)`
+              : ''}
+            .
+          </div>
+        </div>
+      ) : null}
+
+      {/* KPIs agrupados por tema */}
+      <KpiSection
+        title="Buses"
+        note="Total = histórico · Activos = parque operativo · Desglose solo sobre activos"
+        variant="buses"
+      >
         <KpiCard
           value={kpis?.total_buses ?? 0}
           label="Total Buses"
           icon="🚌"
           color="blue"
           to={busesQs()}
+          definition={KPI_DICCIONARIO[0].definicion}
+          hint="Histórico (incluye bajas)"
         />
         <KpiCard
           value={kpis?.buses_activos ?? 0}
@@ -259,8 +421,11 @@ export default function DashboardPage() {
           icon="✅"
           color="green"
           to={busesQs('estado_bus=ACTIVO')}
+          definition={KPI_DICCIONARIO[1].definicion}
+          hint="Parque operativo"
         />
         <ParqueSplitCard
+          definition={KPI_DICCIONARIO[2].definicion}
           items={[
             {
               value: kpis?.buses_convencional ?? 0,
@@ -296,12 +461,20 @@ export default function DashboardPage() {
             },
           ]}
         />
+      </KpiSection>
+
+      <KpiSection
+        title="ITV"
+        note={`Activos (${kpis?.buses_activos ?? 0}) ≈ Vigentes (${kpis?.itv_vigente ?? 0}) + Vencidas (${kpis?.itv_vencido ?? 0}). “Por vencer” ya está incluido en vigentes.`}
+        variant="itv"
+      >
         <KpiCard
           value={kpis?.itv_vigente ?? 0}
           label="ITV Vigentes"
           icon="🔧"
           color="cyan"
           to={busesQs('estado_itv=APROBADO')}
+          definition={KPI_DICCIONARIO[3].definicion}
           hint="Aprobadas (incluye por vencer)"
         />
         <KpiCard
@@ -310,6 +483,8 @@ export default function DashboardPage() {
           icon="⚠️"
           color="amber"
           to={busesQs('estado_itv=POR_VENCER')}
+          definition={KPI_DICCIONARIO[4].definicion}
+          hint="Subconjunto de vigentes (≤30 días)"
         />
         <KpiCard
           value={kpis?.itv_vencido ?? 0}
@@ -317,18 +492,27 @@ export default function DashboardPage() {
           icon="❌"
           color="red"
           to={busesQs('estado_itv=VENCIDO')}
+          definition={KPI_DICCIONARIO[5].definicion}
           hint={
             (kpis?.itv_sin_vigente ?? 0) > 0
               ? `${kpis.itv_sin_vigente} sin ITV vigente`
               : undefined
           }
         />
+      </KpiSection>
+
+      <KpiSection
+        title="Seguros"
+        note="Solo pólizas de buses activos. Vigente = fecha ≥ hoy; vencido = fecha ya pasada."
+        variant="seguros"
+      >
         <KpiCard
           value={kpis?.seguros_pasajeros_vigentes ?? 0}
           label="Seguro Pasajeros Vigentes"
           icon="🛡️"
           color="green"
           to="/seguros?estado=VIGENTE"
+          definition={KPI_DICCIONARIO[6].definicion}
         />
         <KpiCard
           value={kpis?.seguros_pasajeros_vencidos ?? 0}
@@ -336,6 +520,7 @@ export default function DashboardPage() {
           icon="❌"
           color="red"
           to="/seguros?estado=VENCIDO"
+          definition={KPI_DICCIONARIO[7].definicion}
         />
         <KpiCard
           value={kpis?.seguros_terceros_vigentes ?? 0}
@@ -343,6 +528,7 @@ export default function DashboardPage() {
           icon="🛡️"
           color="cyan"
           to="/seguros?estado=VIGENTE"
+          definition={KPI_DICCIONARIO[6].definicion}
         />
         <KpiCard
           value={kpis?.seguros_terceros_vencidos ?? 0}
@@ -350,13 +536,18 @@ export default function DashboardPage() {
           icon="❌"
           color="red"
           to="/seguros?estado=VENCIDO"
+          definition={KPI_DICCIONARIO[7].definicion}
         />
+      </KpiSection>
+
+      <KpiSection title="Alertas" variant="alertas">
         <KpiCard
           value={kpis?.alertas_pendientes ?? 0}
           label="Alertas Pendientes"
           icon="🔔"
           color="amber"
           to="/alertas?estado=PENDIENTE"
+          definition={KPI_DICCIONARIO[8].definicion}
           action={puedeEditar ? (
             <button
               onClick={(e) => {
@@ -383,7 +574,7 @@ export default function DashboardPage() {
             </button>
           ) : undefined}
         />
-      </div>
+      </KpiSection>
 
       {/* Gráfico de Antigüedad de Buses (Líneas) */}
       <div className="card" style={{ marginBottom: '24px' }}>

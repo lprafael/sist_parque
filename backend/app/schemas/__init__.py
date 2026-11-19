@@ -135,7 +135,8 @@ class BusBase(BaseModel):
     tiene_rampa: bool = False
 
 class BusCreate(BusBase):
-    pass
+    """confirmacion_antiguedad: aceptación explícita si la unidad supera 20 años (GVMT 145/2026)."""
+    confirmacion_antiguedad: bool = False
 
 class BusUpdate(BaseModel):
     numero_orden: Optional[int] = None
@@ -152,6 +153,7 @@ class BusUpdate(BaseModel):
     color: Optional[str] = None
     estado_bus: Optional[str] = None
     tiene_rampa: Optional[bool] = None
+    confirmacion_antiguedad: bool = False
 
 class BusBajaIn(BaseModel):
     """Baja formal del parque: estado BAJA + cierra asignación + invalida ITV."""

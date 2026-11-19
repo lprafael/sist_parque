@@ -9,10 +9,30 @@ from app.core.database import get_db
 from app.core.security import get_current_user, require_roles
 from app.models import Bus, Marca, TipoCarroceria, MarcaCarroceria, TipoServicio, ItvBus, BusEmpresa, Eot
 from app.schemas import BusBajaIn, BusBajaOut, BusCreate, BusUpdate, BusOut, TipoServicioOut
+from app.services.antiguedad_flota import (
+    RESOLUCION_GVMT_145,
+    antiguedad_anios,
+    mensaje_alerta_alta,
+    supera_tope_alta,
+)
 from app.services.bus_baja import CAUSALES_BAJA, aplicar_baja_buses
 from app.services.sistema_logs import registrar_auditoria
 
 router = APIRouter(prefix="/buses", tags=["Buses"])
+
+
+def _exigir_confirmacion_antiguedad(anio: Optional[int], confirmado: bool) -> Optional[str]:
+    """
+    Si supera 20 años y no hay confirmación, retorna mensaje de alerta (HTTP 400).
+    Si está confirmado, retorna None y el caller debe auditar la aceptación.
+    """
+    if anio is None:
+        return None
+    if not supera_tope_alta(anio):
+        return None
+    if confirmado:
+        return None
+    return mensaje_alerta_alta(anio)
 
 
 def calcular_estado_itv(vencimiento: Optional[date]) -> str:
@@ -289,9 +309,31 @@ async def crear_bus(
             detail="Para dar de baja use POST /buses/{id}/baja (motivo + cierre de asignación + ITV).",
         )
 
-    bus = Bus(**body.model_dump())
+    alerta_ant = _exigir_confirmacion_antiguedad(body.año, body.confirmacion_antiguedad)
+    if alerta_ant:
+        raise HTTPException(status_code=400, detail=alerta_ant)
+
+    payload = body.model_dump(exclude={"confirmacion_antiguedad"})
+    bus = Bus(**payload)
     db.add(bus)
     await db.flush()
+
+    edad = antiguedad_anios(body.año) if body.año else None
+    bajo_resp = bool(body.confirmacion_antiguedad and supera_tope_alta(body.año))
+    detalle_alta = f"Alta de bus RUA={getattr(bus, 'rua', None)}"
+    if bajo_resp:
+        detalle_alta += (
+            f" | ALERTA {RESOLUCION_GVMT_145}: alta con {edad} años "
+            f"(año {body.año}) confirmada bajo responsabilidad del usuario"
+        )
+
+    datos_auditoria = body.model_dump(mode="json")
+    if bajo_resp:
+        datos_auditoria["alerta_antiguedad"] = {
+            "resolucion": RESOLUCION_GVMT_145,
+            "antiguedad_anios": edad,
+            "confirmado_bajo_responsabilidad": True,
+        }
 
     await registrar_auditoria(
         db,
@@ -299,8 +341,8 @@ async def crear_bus(
         tabla="buses",
         usuario=user,
         registro_id=bus.id_bus,
-        datos_nuevos=body.model_dump(mode="json"),
-        detalles=f"Alta de bus RUA={getattr(bus, 'rua', None)}",
+        datos_nuevos=datos_auditoria,
+        detalles=detalle_alta,
     )
     await db.commit()
     await db.refresh(bus)
@@ -320,6 +362,15 @@ async def actualizar_bus(
 
     old_data = {c.name: getattr(bus, c.name) for c in Bus.__table__.columns}
     update_data = body.model_dump(exclude_unset=True)
+    confirmacion = bool(update_data.pop("confirmacion_antiguedad", False))
+    anio_efectivo = update_data.get("año", bus.año)
+    # Solo exigir confirmación si el año cambia hacia un valor >20 años
+    anio_cambio = "año" in update_data and update_data.get("año") != bus.año
+    if anio_cambio:
+        alerta_ant = _exigir_confirmacion_antiguedad(anio_efectivo, confirmacion)
+        if alerta_ant:
+            raise HTTPException(status_code=400, detail=alerta_ant)
+
     nuevo_estado = (update_data.get("estado_bus") or "").upper()
     if nuevo_estado == "BAJA" and (bus.estado_bus or "").upper() != "BAJA":
         raise HTTPException(
@@ -329,6 +380,21 @@ async def actualizar_bus(
     for k, v in update_data.items():
         setattr(bus, k, v)
 
+    bajo_resp = bool(anio_cambio and confirmacion and anio_efectivo and supera_tope_alta(anio_efectivo))
+    detalle_upd = f"Actualización de bus id={id_bus}"
+    datos_nuevos_audit = dict(update_data)
+    if bajo_resp:
+        edad = antiguedad_anios(anio_efectivo)
+        detalle_upd += (
+            f" | ALERTA {RESOLUCION_GVMT_145}: año actualizado a {anio_efectivo} "
+            f"({edad} años) confirmado bajo responsabilidad del usuario"
+        )
+        datos_nuevos_audit["alerta_antiguedad"] = {
+            "resolucion": RESOLUCION_GVMT_145,
+            "antiguedad_anios": edad,
+            "confirmado_bajo_responsabilidad": True,
+        }
+
     await registrar_auditoria(
         db,
         accion="update",
@@ -336,8 +402,8 @@ async def actualizar_bus(
         usuario=user,
         registro_id=id_bus,
         datos_anteriores=old_data,
-        datos_nuevos=update_data,
-        detalles=f"Actualización de bus id={id_bus}",
+        datos_nuevos=datos_nuevos_audit,
+        detalles=detalle_upd,
     )
     await db.commit()
     return await obtener_bus(id_bus, db)

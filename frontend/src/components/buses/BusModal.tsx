@@ -1,7 +1,14 @@
-import { useState, useEffect, useRef } from 'react'
-import { X, Save } from 'lucide-react'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { X, Save, AlertTriangle } from 'lucide-react'
 import { busesApi } from '../../api'
 import { formatApiError } from '../../api/client'
+
+/** Tope Art. 2° GVMT 145/2026: altas nuevas no deberían superar 20 años. */
+const TOPE_ANTIGUEDAD_ALTA = 20
+
+function antiguedadAnios(anio: number): number {
+  return new Date().getFullYear() - Number(anio)
+}
 
 interface BusModalProps {
   isOpen: boolean
@@ -42,6 +49,7 @@ export default function BusModal({
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [confirmacionAntiguedad, setConfirmacionAntiguedad] = useState(false)
 
   useEffect(() => {
     if (busToEdit) {
@@ -83,6 +91,7 @@ export default function BusModal({
       })
     }
     setError('')
+    setConfirmacionAntiguedad(false)
   }, [busToEdit, isOpen, marcas, tiposCarroceria, marcasCarroceria, tiposServicio])
 
   // Foco en RUA al abrir (alta y edición)
@@ -116,10 +125,23 @@ export default function BusModal({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [isOpen, loading, onClose])
 
+  const edad = useMemo(() => antiguedadAnios(Number(formData.año) || 0), [formData.año])
+  const superaTope = edad > TOPE_ANTIGUEDAD_ALTA
+  const anioOriginal = busToEdit?.año != null ? Number(busToEdit.año) : null
+  const requiereConfirmacion = !busToEdit
+    ? superaTope
+    : superaTope && anioOriginal !== Number(formData.año)
+
   if (!isOpen) return null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (requiereConfirmacion && !confirmacionAntiguedad) {
+      setError(
+        'Debe confirmar que realiza el alta/cambio bajo su responsabilidad (unidad con más de 20 años).',
+      )
+      return
+    }
     setLoading(true)
     setError('')
 
@@ -137,6 +159,7 @@ export default function BusModal({
       estado_bus: formData.estado_bus,
       tiene_rampa: Boolean(formData.tiene_rampa),
       id_tipo_servicio: formData.id_tipo_servicio ? Number(formData.id_tipo_servicio) : null,
+      confirmacion_antiguedad: requiereConfirmacion ? confirmacionAntiguedad : false,
     }
 
     try {
@@ -223,8 +246,16 @@ export default function BusModal({
               className="form-control"
               required
               value={formData.año}
-              onChange={e => setFormData({ ...formData, año: Number(e.target.value) })}
+              onChange={e => {
+                setFormData({ ...formData, año: Number(e.target.value) })
+                setConfirmacionAntiguedad(false)
+              }}
             />
+            {Number(formData.año) > 0 && (
+              <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Antigüedad: {edad} año{edad === 1 ? '' : 's'}
+              </p>
+            )}
           </div>
 
           <div>
@@ -352,11 +383,61 @@ export default function BusModal({
             </select>
           </div>
 
+          {requiereConfirmacion && (
+            <div
+              style={{
+                gridColumn: 'span 2',
+                padding: '0.85rem 1rem',
+                borderRadius: '8px',
+                backgroundColor: '#FEF3C7',
+                border: '1px solid #F59E0B',
+                color: '#92400E',
+                fontSize: '0.875rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.65rem',
+              }}
+              role="alert"
+            >
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start' }}>
+                <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <strong>Alerta — Resolución GVMT N.º 145/2026 Art. 2º</strong>
+                  <p style={{ margin: '0.35rem 0 0' }}>
+                    No corresponde el alta de unidades nuevas con más de {TOPE_ANTIGUEDAD_ALTA} años
+                    de antigüedad. Esta unidad tiene <strong>{edad} años</strong> (año/modelo {formData.año}).
+                    Puede continuar bajo su responsabilidad.
+                  </p>
+                </div>
+              </div>
+              <label
+                htmlFor="bus-confirm-antiguedad"
+                style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', cursor: 'pointer', fontWeight: 500 }}
+              >
+                <input
+                  id="bus-confirm-antiguedad"
+                  type="checkbox"
+                  checked={confirmacionAntiguedad}
+                  onChange={e => setConfirmacionAntiguedad(e.target.checked)}
+                  style={{ marginTop: 3 }}
+                />
+                <span>
+                  Confirmo que realizo este registro bajo mi responsabilidad, tomando conocimiento
+                  de la Resolución GVMT N.º 145/2026.
+                </span>
+              </label>
+            </div>
+          )}
+
           <div style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>
               Cancelar
             </button>
-            <button type="submit" className="btn btn-primary" disabled={loading}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading || (requiereConfirmacion && !confirmacionAntiguedad)}
+            >
               <Save size={16} />
               <span>{loading ? 'Guardando...' : 'Guardar Bus'}</span>
             </button>

@@ -1,8 +1,27 @@
 import { useState } from 'react'
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, Play, Building2 } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, Play, Building2, History, RefreshCw } from 'lucide-react'
 import { importadorApi } from '../api'
 import { formatApiError } from '../api/client'
 import { useRol } from '../hooks/useRol'
+
+type HistorialItem = {
+  id_auditoria: number
+  fecha: string | null
+  usuario: string
+  tabla: string
+  tipo: string
+  filename?: string | null
+  resumen: string
+  detalle?: Record<string, unknown>
+}
+
+const TIPO_LABEL: Record<string, string> = {
+  itv: 'ITV / Parque',
+  estado: 'Estados',
+  empresas: 'Empresas',
+  importacion: 'Importación',
+}
 
 type PreviewData = {
   status: string
@@ -87,6 +106,7 @@ type EmpresaApplyData = {
 
 export default function ImportadorPage() {
   const { puedeEditar } = useRol()
+  const qc = useQueryClient()
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [applying, setApplying] = useState(false)
@@ -97,6 +117,25 @@ export default function ImportadorPage() {
   const [error, setError] = useState('')
   const [sincronizarEstado, setSincronizarEstado] = useState(false)
   const [crearFaltantes, setCrearFaltantes] = useState(true)
+  const [histPage, setHistPage] = useState(1)
+
+  const {
+    data: histResp,
+    isLoading: histLoading,
+    refetch: refetchHistorial,
+  } = useQuery({
+    queryKey: ['importador-historial', histPage],
+    queryFn: () => importadorApi.historial({ page: histPage, page_size: 10 }),
+    enabled: puedeEditar,
+  })
+  const histItems: HistorialItem[] = histResp?.data?.items ?? []
+  const histTotal: number = histResp?.data?.total ?? 0
+  const histPageSize: number = histResp?.data?.page_size ?? 10
+  const histPages = Math.max(1, Math.ceil(histTotal / histPageSize))
+
+  const refreshHistorial = () => {
+    qc.invalidateQueries({ queryKey: ['importador-historial'] })
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
@@ -161,6 +200,8 @@ export default function ImportadorPage() {
     try {
       const res = await importadorApi.sincronizarEmpresas(formData)
       setEmpresaApply(res.data)
+      setHistPage(1)
+      refreshHistorial()
     } catch (err: any) {
       setError(formatApiError(err, 'Error al sincronizar empresas.'))
     } finally {
@@ -194,6 +235,8 @@ export default function ImportadorPage() {
     try {
       const res = await importadorApi.aplicar(formData)
       setApplyResult(res.data)
+      setHistPage(1)
+      refreshHistorial()
     } catch (err: any) {
       setError(formatApiError(err, 'Error al aplicar la importación.'))
     } finally {
@@ -229,6 +272,8 @@ export default function ImportadorPage() {
         auxiliar_filas: 0,
         errores: [],
       })
+      setHistPage(1)
+      refreshHistorial()
     } catch (err: any) {
       setError(formatApiError(err, 'Error al sincronizar estados.'))
     } finally {
@@ -594,6 +639,113 @@ export default function ImportadorPage() {
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      <div className="card" style={{ maxWidth: 960, margin: '1.5rem auto 0', padding: 0 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '1rem 1.25rem',
+            borderBottom: '1px solid var(--border-color, #e2e8f0)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <History size={18} />
+            <div>
+              <div style={{ fontWeight: 600 }}>Historial de importaciones</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Fechas, archivo y usuario de cada importación aplicada
+                {histTotal > 0 ? ` · ${histTotal} registro${histTotal === 1 ? '' : 's'}` : ''}
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => refetchHistorial()}
+            disabled={histLoading}
+          >
+            <RefreshCw size={14} /> Actualizar
+          </button>
+        </div>
+
+        {histLoading ? (
+          <div className="loading-spinner" style={{ padding: '2rem' }}><div className="spinner" /></div>
+        ) : histItems.length === 0 ? (
+          <div className="empty-state" style={{ padding: '2rem' }}>
+            <div className="empty-title">Sin importaciones registradas</div>
+            <p>Cuando apliques una planilla, quedará aquí con fecha y usuario.</p>
+          </div>
+        ) : (
+          <>
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Archivo</th>
+                    <th>Usuario</th>
+                    <th>Resumen</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {histItems.map((h) => (
+                    <tr key={h.id_auditoria}>
+                      <td style={{ fontSize: '0.8rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                        {h.fecha ? new Date(h.fecha).toLocaleString('es-PY') : '—'}
+                      </td>
+                      <td>
+                        <span className="badge badge-por-vencer">
+                          {TIPO_LABEL[h.tipo] ?? h.tipo}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '0.85rem', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {h.filename || '—'}
+                      </td>
+                      <td>{h.usuario}</td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{h.resumen}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {histPages > 1 && (
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.85rem',
+                  borderTop: '1px solid var(--border-color, #e2e8f0)',
+                }}
+              >
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={histPage <= 1}
+                  onClick={() => setHistPage((p) => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </button>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  Página {histPage} de {histPages}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={histPage >= histPages}
+                  onClick={() => setHistPage((p) => Math.min(histPages, p + 1))}
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

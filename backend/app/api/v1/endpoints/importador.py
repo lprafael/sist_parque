@@ -1,9 +1,13 @@
 """Importador masivo de planilla ITV (Excel)."""
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from typing import Any, Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import require_roles
+from app.models import Auditoria
 from app.services.itv_excel import apply_import, build_preview, sincronizar_estado_desde_excel
 from app.services.empresa_excel_sync import apply_empresa_sync, build_empresa_sync_preview
 from app.services.sistema_logs import registrar_auditoria
@@ -11,6 +15,97 @@ from app.services.sistema_logs import registrar_auditoria
 router = APIRouter(prefix="/importador", tags=["Importador"])
 
 MAX_BYTES = 40 * 1024 * 1024  # 40 MB
+
+
+def _tipo_importacion(tabla: Optional[str], datos: Any) -> str:
+    """Clasifica el registro de auditoría de importación."""
+    d = datos if isinstance(datos, dict) else {}
+    if d.get("tipo"):
+        return str(d["tipo"])
+    if (tabla or "").lower() == "bus_empresa" or "transferencias" in d or "altas" in d:
+        return "empresas"
+    if any(k in d for k in ("itv_insertados", "buses_creados", "buses_actualizados", "seguros_insertados")):
+        return "itv"
+    if any(k in d for k in ("buses_inactivados", "buses_activados", "buses_baja")):
+        return "estado"
+    return "importacion"
+
+
+def _resumen_importacion(tipo: str, datos: Any) -> str:
+    d = datos if isinstance(datos, dict) else {}
+    if tipo == "empresas":
+        return (
+            f"Transferencias: {d.get('transferencias', 0)} · "
+            f"Altas: {d.get('altas', 0)} · "
+            f"Sin cambio: {d.get('sin_cambio', 0)}"
+        )
+    if tipo == "estado":
+        return (
+            f"Activados: {d.get('buses_activados', 0)} · "
+            f"Inactivados: {d.get('buses_inactivados', 0)} · "
+            f"Bajas: {d.get('buses_baja', 0)}"
+        )
+    if tipo == "itv":
+        return (
+            f"Actualizados: {d.get('buses_actualizados', 0)} · "
+            f"Creados: {d.get('buses_creados', 0)} · "
+            f"ITV: {d.get('itv_insertados', 0)} · "
+            f"Bajas: {d.get('buses_baja', 0)}"
+        )
+    parts = [f"{k}: {v}" for k, v in d.items() if k not in ("filename", "tipo") and v is not None]
+    return " · ".join(parts[:6]) if parts else "—"
+
+
+@router.get("/historial")
+async def historial_importaciones(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(15, ge=1, le=50),
+    db: AsyncSession = Depends(get_db),
+    _user=Depends(require_roles(["ADMIN", "SUPERVISOR"])),
+):
+    """
+    Historial de importaciones aplicadas (auditoría accion=IMPORT).
+    Incluye ITV, sincronización de estados y sincronización de empresas.
+    """
+    q = select(Auditoria).where(
+        Auditoria.accion == "IMPORT",
+        or_(
+            Auditoria.tabla_afectada.in_(["buses", "bus_empresa"]),
+            Auditoria.tabla_afectada.ilike("%import%"),
+        ),
+    )
+    total = (
+        await db.execute(select(func.count()).select_from(q.subquery()))
+    ).scalar() or 0
+    rows = (
+        await db.execute(
+            q.order_by(Auditoria.fecha_accion.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+    ).scalars().all()
+
+    items = []
+    for row in rows:
+        datos = row.datos_nuevos if isinstance(row.datos_nuevos, dict) else {}
+        tipo = _tipo_importacion(row.tabla_afectada, datos)
+        items.append({
+            "id_auditoria": row.id_auditoria,
+            "fecha": row.fecha_accion.isoformat() if row.fecha_accion else None,
+            "usuario": row.usuario or "Sistema",
+            "tabla": row.tabla_afectada,
+            "tipo": tipo,
+            "filename": datos.get("filename"),
+            "resumen": _resumen_importacion(tipo, datos),
+            "detalle": datos,
+        })
+
+    return {
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "items": items,
+    }
 
 
 async def _read_xlsx(file: UploadFile) -> bytes:
@@ -139,6 +234,7 @@ async def aplicar_excel(
         tabla="buses",
         usuario=user,
         datos_nuevos={
+            "tipo": "itv",
             "filename": file.filename,
             "buses_creados": result.buses_creados,
             "buses_actualizados": result.buses_actualizados,
@@ -213,6 +309,7 @@ async def sincronizar_estado_excel(
         tabla="buses",
         usuario=user,
         datos_nuevos={
+            "tipo": "estado",
             "filename": file.filename,
             "buses_activados": result.buses_activados,
             "buses_inactivados": result.buses_inactivados,
@@ -311,6 +408,7 @@ async def sincronizar_empresas_excel(
         tabla="bus_empresa",
         usuario=user,
         datos_nuevos={
+            "tipo": "empresas",
             "filename": file.filename,
             "transferencias": result.transferencias,
             "altas": result.altas,

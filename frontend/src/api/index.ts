@@ -22,6 +22,8 @@ export const dashboardApi = {
     api.get('/dashboard/distribucion-empresas', { params }),
   distribucionAntiguedad: (params?: DashboardParams) =>
     api.get('/dashboard/distribucion-antiguedad', { params }),
+  analisisAntiguedad: (params?: DashboardParams) =>
+    api.get('/dashboard/analisis-antiguedad', { params }),
   distribucionTipoServicio: (params?: DashboardParams) =>
     api.get('/dashboard/distribucion-tipo-servicio', { params }),
   distribucionMarcas: (params?: DashboardParams) =>

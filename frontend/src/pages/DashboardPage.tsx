@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
 import { dashboardApi, alertasApi, empresasApi } from '../api'
-import { Trash2, Building2, Info, BookOpen, ChevronDown } from 'lucide-react'
+import { Trash2, Building2, Info, BookOpen, ChevronDown, ExternalLink } from 'lucide-react'
 import { useRol } from '../hooks/useRol'
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip,
@@ -226,6 +226,10 @@ export default function DashboardPage() {
       .join('&')
     return parts ? `/buses?${parts}` : '/buses'
   }
+
+  const antiguedadQs = idEot
+    ? `/dashboard/antiguedad?empresa=${encodeURIComponent(idEot)}`
+    : '/dashboard/antiguedad'
 
   const { data: empresasListaResp } = useQuery({
     queryKey: ['empresas-filtro-dashboard'],
@@ -585,11 +589,21 @@ export default function DashboardPage() {
               Distribución por años de antigüedad (Eje X: Edad en años / Eje Y: Cantidad de buses)
             </div>
           </div>
-          <div style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', padding: '6px 14px', borderRadius: 'var(--radius-md)', textAlign: 'right' }}>
-            <div style={{ fontSize: '0.7rem', color: '#a5b4fc', textTransform: 'uppercase', fontWeight: 600 }}>Edad Promedio</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#818cf8' }}>
-              {promedioEdad} años
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', padding: '6px 14px', borderRadius: 'var(--radius-md)', textAlign: 'right' }}>
+              <div style={{ fontSize: '0.7rem', color: '#a5b4fc', textTransform: 'uppercase', fontWeight: 600 }}>Edad Promedio</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#818cf8' }}>
+                {promedioEdad} años
+              </div>
             </div>
+            <Link
+              to={antiguedadQs}
+              className="btn btn-secondary btn-sm"
+              title="Ver análisis detallado de antigüedad"
+            >
+              <ExternalLink size={14} />
+              <span>Ver análisis</span>
+            </Link>
           </div>
         </div>
         <ResponsiveContainer width="100%" height={260}>

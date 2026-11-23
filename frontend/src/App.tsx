@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore'
 import Layout from './components/Layout'
 import LoginPage      from './pages/LoginPage'
 import DashboardPage  from './pages/DashboardPage'
+import AntiguedadPage from './pages/AntiguedadPage'
 import BusesPage      from './pages/BusesPage'
 import EmpresasPage   from './pages/EmpresasPage'
 import ItvPage        from './pages/ItvPage'
@@ -41,6 +42,14 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <DashboardPage />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/dashboard/antiguedad" element={
+        <ProtectedRoute>
+          <Layout>
+            <AntiguedadPage />
           </Layout>
         </ProtectedRoute>
       } />

@@ -302,6 +302,34 @@ async def distribucion_por_empresa(
     return items
 
 
+def _conds_antiguedad(id_eot: Optional[str], anio_ref: int):
+    """Buses activos con año/modelo válido (excluye futuros → evita edades negativas)."""
+    bus_f = _bus_filter(id_eot)
+    conds = [
+        Bus.estado_bus == "ACTIVO",
+        Bus.año.isnot(None),
+        Bus.año > 1970,
+        Bus.año <= anio_ref,
+    ]
+    if bus_f is not None:
+        conds.append(bus_f)
+    return conds
+
+
+def _mediana_desde_grupos(grupos: list[tuple[int, int]]) -> Optional[float]:
+    """Mediana ponderada: grupos = [(edad, cantidad), ...] ordenados por edad."""
+    total = sum(c for _, c in grupos)
+    if total <= 0:
+        return None
+    objetivo = (total + 1) / 2
+    acum = 0
+    for edad, cnt in grupos:
+        acum += cnt
+        if acum >= objetivo:
+            return float(edad)
+    return float(grupos[-1][0]) if grupos else None
+
+
 @router.get("/distribucion-antiguedad")
 async def distribucion_antiguedad_buses(
     id_eot: Optional[str] = Query(None, description="Filtrar por id_eot_vmt_hex de la empresa"),
@@ -310,11 +338,7 @@ async def distribucion_antiguedad_buses(
 ):
     """Distribución de buses por años de antigüedad y cálculo de la edad promedio."""
     current_year = date.today().year
-    bus_f = _bus_filter(id_eot)
-
-    conds = [Bus.estado_bus == "ACTIVO", Bus.año.isnot(None), Bus.año > 1970]
-    if bus_f is not None:
-        conds.append(bus_f)
+    conds = _conds_antiguedad(id_eot, current_year)
 
     result = await db.execute(
         select(Bus.año, func.count(Bus.id_bus).label("cantidad"))
@@ -344,7 +368,225 @@ async def distribucion_antiguedad_buses(
     return {
         "promedio_edad": promedio_edad,
         "total_buses": total_buses,
+        "anio_referencia": current_year,
         "items": items,
+    }
+
+
+@router.get("/analisis-antiguedad")
+async def analisis_antiguedad_parque(
+    id_eot: Optional[str] = Query(None, description="Filtrar por id_eot_vmt_hex de la empresa"),
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_user),
+):
+    """
+    Análisis detallado de antigüedad del parque activo:
+    año de referencia del promedio, extremos, tramos, umbrales normativos y muestra.
+    """
+    anio_ref = date.today().year
+    conds = _conds_antiguedad(id_eot, anio_ref)
+
+    result = await db.execute(
+        select(Bus.año, func.count(Bus.id_bus).label("cantidad"))
+        .where(and_(*conds))
+        .group_by(Bus.año)
+        .order_by(Bus.año.asc())
+    )
+    rows = result.all()
+
+    items = []
+    total_buses = 0
+    suma_edades = 0
+    grupos_edad: list[tuple[int, int]] = []
+
+    for anio, cnt in rows:
+        edad = anio_ref - int(anio)
+        total_buses += cnt
+        suma_edades += edad * cnt
+        grupos_edad.append((edad, cnt))
+        items.append({
+            "anio": anio,
+            "antiguedad": edad,
+            "label": f"{edad} año{'s' if edad != 1 else ''} ({anio})",
+            "cantidad": cnt,
+        })
+
+    if total_buses == 0:
+        return {
+            "anio_referencia": anio_ref,
+            "total_buses": 0,
+            "promedio_edad": 0,
+            "mediana_edad": None,
+            "moda": None,
+            "anio_desde": None,
+            "anio_hasta": None,
+            "mas_antiguos": None,
+            "mas_nuevos": None,
+            "tramos": [],
+            "umbrales": {},
+            "distribucion": [],
+            "top_por_cantidad": [],
+            "empresas_mas_antiguas": [],
+            "muestra_mas_antiguos": [],
+        }
+
+    promedio = round(suma_edades / total_buses, 1)
+    mediana = _mediana_desde_grupos(grupos_edad)
+    moda_item = max(items, key=lambda x: x["cantidad"])
+    anio_desde = items[0]["anio"]
+    anio_hasta = items[-1]["anio"]
+    mas_antiguos = items[0]  # menor año = más viejo
+    mas_nuevos = items[-1]
+
+    def _tramo(label: str, lo: int, hi: Optional[int]) -> dict:
+        cant = sum(
+            it["cantidad"]
+            for it in items
+            if it["antiguedad"] >= lo and (hi is None or it["antiguedad"] <= hi)
+        )
+        return {
+            "label": label,
+            "edad_desde": lo,
+            "edad_hasta": hi,
+            "cantidad": cant,
+            "porcentaje": round(100 * cant / total_buses, 1),
+        }
+
+    tramos = [
+        _tramo("0 a 6 años", 0, 6),
+        _tramo("7 a 13 años", 7, 13),
+        _tramo("14 a 20 años", 14, 20),
+        _tramo("Más de 20 años", 21, None),
+    ]
+
+    def _umbral(pred) -> dict:
+        cant = sum(it["cantidad"] for it in items if pred(it["antiguedad"]))
+        return {"cantidad": cant, "porcentaje": round(100 * cant / total_buses, 1)}
+
+    umbrales = {
+        "hasta_15": {
+            "descripcion": "Hasta 15 años (tope general Ley 7617)",
+            **_umbral(lambda e: e <= 15),
+        },
+        "mas_de_15": {
+            "descripcion": "Más de 15 años",
+            **_umbral(lambda e: e > 15),
+        },
+        "hasta_20": {
+            "descripcion": "Hasta 20 años (tope habitual de altas)",
+            **_umbral(lambda e: e <= 20),
+        },
+        "mas_de_20": {
+            "descripcion": "Más de 20 años (alerta GVMT 145/2026 Art. 2°)",
+            **_umbral(lambda e: e > 20),
+        },
+        "igual_21": {
+            "descripcion": "Exactamente 21 años (excepción 2027 GVMT 145)",
+            **_umbral(lambda e: e == 21),
+        },
+    }
+
+    top_por_cantidad = sorted(items, key=lambda x: x["cantidad"], reverse=True)[:10]
+
+    # Empresas con flota más antigua (solo si no hay filtro EOT)
+    empresas_mas_antiguas = []
+    if not id_eot:
+        emp_q = (
+            select(
+                Eot.eot_nombre,
+                BusEmpresa.id_eot,
+                func.count(Bus.id_bus).label("total"),
+                func.avg(anio_ref - Bus.año).label("promedio"),
+                func.max(anio_ref - Bus.año).label("edad_max"),
+                func.min(Bus.año).label("anio_min"),
+            )
+            .join(BusEmpresa, BusEmpresa.id_bus == Bus.id_bus)
+            .join(Eot, Eot.id_eot_vmt_hex == BusEmpresa.id_eot, isouter=True)
+            .where(
+                and_(
+                    *conds,
+                    BusEmpresa.fecha_fin_asignacion.is_(None),
+                )
+            )
+            .group_by(Eot.eot_nombre, BusEmpresa.id_eot)
+            .having(func.count(Bus.id_bus) >= 5)
+            .order_by(func.avg(anio_ref - Bus.año).desc())
+            .limit(10)
+        )
+        emp_rows = (await db.execute(emp_q)).all()
+        for nombre, eot_id, total, prom, edad_max, anio_min in emp_rows:
+            empresas_mas_antiguas.append({
+                "empresa": nombre or eot_id or "Sin nombre",
+                "id_eot": eot_id,
+                "total_buses": total,
+                "promedio_edad": round(float(prom or 0), 1),
+                "edad_max": int(edad_max or 0),
+                "anio_mas_antiguo": int(anio_min) if anio_min else None,
+            })
+
+    # Muestra de buses más antiguos (con empresa vigente)
+    emp_activa = (
+        select(
+            BusEmpresa.id_bus.label("id_bus"),
+            func.coalesce(Eot.eot_nombre, BusEmpresa.id_eot).label("empresa"),
+        )
+        .outerjoin(Eot, Eot.id_eot_vmt_hex == BusEmpresa.id_eot)
+        .where(BusEmpresa.fecha_fin_asignacion.is_(None))
+        .subquery()
+    )
+    muestra_q = (
+        select(
+            Bus.id_bus,
+            Bus.rua,
+            Bus.año,
+            Bus.numero_orden,
+            emp_activa.c.empresa,
+        )
+        .outerjoin(emp_activa, emp_activa.c.id_bus == Bus.id_bus)
+        .where(and_(*conds))
+        .order_by(Bus.año.asc(), Bus.rua.asc())
+        .limit(25)
+    )
+    muestra_mas_antiguos = [
+        {
+            "id_bus": id_bus,
+            "rua": rua,
+            "numero_orden": nro,
+            "anio": anio,
+            "antiguedad": anio_ref - int(anio),
+            "empresa": empresa,
+        }
+        for id_bus, rua, anio, nro, empresa in (await db.execute(muestra_q)).all()
+    ]
+
+    return {
+        "anio_referencia": anio_ref,
+        "total_buses": total_buses,
+        "promedio_edad": promedio,
+        "mediana_edad": mediana,
+        "moda": {
+            "anio": moda_item["anio"],
+            "antiguedad": moda_item["antiguedad"],
+            "cantidad": moda_item["cantidad"],
+        },
+        "anio_desde": anio_desde,
+        "anio_hasta": anio_hasta,
+        "mas_antiguos": {
+            "anio": mas_antiguos["anio"],
+            "antiguedad": mas_antiguos["antiguedad"],
+            "cantidad": mas_antiguos["cantidad"],
+        },
+        "mas_nuevos": {
+            "anio": mas_nuevos["anio"],
+            "antiguedad": mas_nuevos["antiguedad"],
+            "cantidad": mas_nuevos["cantidad"],
+        },
+        "tramos": tramos,
+        "umbrales": umbrales,
+        "distribucion": items,
+        "top_por_cantidad": top_por_cantidad,
+        "empresas_mas_antiguas": empresas_mas_antiguas,
+        "muestra_mas_antiguos": muestra_mas_antiguos,
     }
 
 

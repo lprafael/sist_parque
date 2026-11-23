@@ -131,10 +131,10 @@ export default function AntiguedadPage() {
               <XAxis dataKey="label" tick={{ fill: '#8b93c4', fontSize: 11 }} />
               <YAxis tick={{ fill: '#8b93c4', fontSize: 11 }} />
               <Tooltip
-                formatter={(value: number, _n, ctx: any) => [
-                  `${value} buses (${ctx?.payload?.porcentaje ?? 0}%)`,
-                  'Cantidad',
-                ]}
+                formatter={(value, _name, item) => {
+                  const pct = (item?.payload as { porcentaje?: number } | undefined)?.porcentaje ?? 0
+                  return [`${value ?? 0} buses (${pct}%)`, 'Cantidad']
+                }}
               />
               <Bar dataKey="cantidad" radius={[6, 6, 0, 0]}>
                 {(d.tramos ?? []).map((_: unknown, i: number) => (

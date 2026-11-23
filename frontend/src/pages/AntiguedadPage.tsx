@@ -121,7 +121,7 @@ export default function AntiguedadPage() {
         />
       </div>
 
-      <div className="dashboard-charts-row" style={{ marginBottom: '1.25rem' }}>
+      <div className="antiguedad-split-row">
         <div className="card">
           <div className="card-header">
             <span className="card-title">Distribución por tramos de edad</span>
@@ -191,9 +191,9 @@ export default function AntiguedadPage() {
       </div>
 
       {!idEot && ((d.empresas_mas_antiguas?.length ?? 0) > 0 || (d.empresas_mas_nuevas?.length ?? 0) > 0) && (
-        <div className="dashboard-charts-row" style={{ marginBottom: '1.25rem' }}>
+        <div className="antiguedad-split-row">
           {(d.empresas_mas_antiguas?.length ?? 0) > 0 && (
-            <div className="card">
+            <div className="card antiguedad-empresa-card">
               <div className="card-header">
                 <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Building2 size={16} /> Empresas con flota más antigua
@@ -239,7 +239,7 @@ export default function AntiguedadPage() {
           )}
 
           {(d.empresas_mas_nuevas?.length ?? 0) > 0 && (
-            <div className="card">
+            <div className="card antiguedad-empresa-card">
               <div className="card-header">
                 <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Building2 size={16} /> Empresas con flota más nueva

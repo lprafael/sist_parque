@@ -427,6 +427,7 @@ async def analisis_antiguedad_parque(
             "distribucion": [],
             "top_por_cantidad": [],
             "empresas_mas_antiguas": [],
+            "empresas_mas_nuevas": [],
             "muestra_mas_antiguos": [],
         }
 
@@ -488,17 +489,20 @@ async def analisis_antiguedad_parque(
 
     top_por_cantidad = sorted(items, key=lambda x: x["cantidad"], reverse=True)[:10]
 
-    # Empresas con flota más antigua (solo si no hay filtro EOT)
+    # Empresas con flota más antigua / más nueva (solo si no hay filtro EOT)
     empresas_mas_antiguas = []
+    empresas_mas_nuevas = []
     if not id_eot:
-        emp_q = (
+        emp_base = (
             select(
                 Eot.eot_nombre,
                 BusEmpresa.id_eot,
                 func.count(Bus.id_bus).label("total"),
                 func.avg(anio_ref - Bus.año).label("promedio"),
                 func.max(anio_ref - Bus.año).label("edad_max"),
+                func.min(anio_ref - Bus.año).label("edad_min"),
                 func.min(Bus.año).label("anio_min"),
+                func.max(Bus.año).label("anio_max"),
             )
             .join(BusEmpresa, BusEmpresa.id_bus == Bus.id_bus)
             .join(Eot, Eot.id_eot_vmt_hex == BusEmpresa.id_eot, isouter=True)
@@ -510,19 +514,33 @@ async def analisis_antiguedad_parque(
             )
             .group_by(Eot.eot_nombre, BusEmpresa.id_eot)
             .having(func.count(Bus.id_bus) >= 5)
-            .order_by(func.avg(anio_ref - Bus.año).desc())
-            .limit(10)
         )
-        emp_rows = (await db.execute(emp_q)).all()
-        for nombre, eot_id, total, prom, edad_max, anio_min in emp_rows:
-            empresas_mas_antiguas.append({
+
+        def _row_empresa(nombre, eot_id, total, prom, edad_max, edad_min, anio_min, anio_max):
+            return {
                 "empresa": nombre or eot_id or "Sin nombre",
                 "id_eot": eot_id,
                 "total_buses": total,
                 "promedio_edad": round(float(prom or 0), 1),
                 "edad_max": int(edad_max or 0),
+                "edad_min": int(edad_min or 0),
                 "anio_mas_antiguo": int(anio_min) if anio_min else None,
-            })
+                "anio_mas_nuevo": int(anio_max) if anio_max else None,
+            }
+
+        emp_ant = (
+            await db.execute(
+                emp_base.order_by(func.avg(anio_ref - Bus.año).desc()).limit(10)
+            )
+        ).all()
+        empresas_mas_antiguas = [_row_empresa(*r) for r in emp_ant]
+
+        emp_nue = (
+            await db.execute(
+                emp_base.order_by(func.avg(anio_ref - Bus.año).asc()).limit(10)
+            )
+        ).all()
+        empresas_mas_nuevas = [_row_empresa(*r) for r in emp_nue]
 
     # Muestra de buses más antiguos (con empresa vigente)
     emp_activa = (
@@ -586,6 +604,7 @@ async def analisis_antiguedad_parque(
         "distribucion": items,
         "top_por_cantidad": top_por_cantidad,
         "empresas_mas_antiguas": empresas_mas_antiguas,
+        "empresas_mas_nuevas": empresas_mas_nuevas,
         "muestra_mas_antiguos": muestra_mas_antiguos,
     }
 

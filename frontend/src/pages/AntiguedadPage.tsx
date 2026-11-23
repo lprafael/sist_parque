@@ -190,48 +190,99 @@ export default function AntiguedadPage() {
         </div>
       </div>
 
-      {!idEot && (d.empresas_mas_antiguas?.length ?? 0) > 0 && (
-        <div className="card" style={{ marginBottom: '1.25rem' }}>
-          <div className="card-header">
-            <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Building2 size={16} /> Empresas con flota más antigua (mín. 5 buses)
-            </span>
-          </div>
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Empresa</th>
-                  <th>Buses</th>
-                  <th>Promedio</th>
-                  <th>Edad máx.</th>
-                  <th>Año más antiguo</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.empresas_mas_antiguas.map((e: any) => (
-                  <tr key={e.id_eot || e.empresa}>
-                    <td>{e.empresa}</td>
-                    <td>{e.total_buses}</td>
-                    <td>{e.promedio_edad}a</td>
-                    <td>{e.edad_max}a</td>
-                    <td>{e.anio_mas_antiguo ?? '—'}</td>
-                    <td>
-                      {e.id_eot && (
-                        <Link
-                          to={`/dashboard/antiguedad?empresa=${encodeURIComponent(e.id_eot)}`}
-                          className="btn btn-secondary btn-sm"
-                        >
-                          Ver
-                        </Link>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {!idEot && ((d.empresas_mas_antiguas?.length ?? 0) > 0 || (d.empresas_mas_nuevas?.length ?? 0) > 0) && (
+        <div className="dashboard-charts-row" style={{ marginBottom: '1.25rem' }}>
+          {(d.empresas_mas_antiguas?.length ?? 0) > 0 && (
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Building2 size={16} /> Empresas con flota más antigua
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Mín. 5 buses · mayor promedio</span>
+              </div>
+              <div className="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Empresa</th>
+                      <th>Buses</th>
+                      <th>Promedio</th>
+                      <th>Edad máx.</th>
+                      <th>Año más antiguo</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.empresas_mas_antiguas.map((e: any) => (
+                      <tr key={`ant-${e.id_eot || e.empresa}`}>
+                        <td>{e.empresa}</td>
+                        <td>{e.total_buses}</td>
+                        <td>{e.promedio_edad}a</td>
+                        <td>{e.edad_max}a</td>
+                        <td>{e.anio_mas_antiguo ?? '—'}</td>
+                        <td>
+                          {e.id_eot && (
+                            <Link
+                              to={`/dashboard/antiguedad?empresa=${encodeURIComponent(e.id_eot)}`}
+                              className="btn btn-secondary btn-sm"
+                            >
+                              Ver
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {(d.empresas_mas_nuevas?.length ?? 0) > 0 && (
+            <div className="card">
+              <div className="card-header">
+                <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Building2 size={16} /> Empresas con flota más nueva
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Mín. 5 buses · menor promedio</span>
+              </div>
+              <div className="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Empresa</th>
+                      <th>Buses</th>
+                      <th>Promedio</th>
+                      <th>Edad mín.</th>
+                      <th>Año más nuevo</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.empresas_mas_nuevas.map((e: any) => (
+                      <tr key={`nue-${e.id_eot || e.empresa}`}>
+                        <td>{e.empresa}</td>
+                        <td>{e.total_buses}</td>
+                        <td>{e.promedio_edad}a</td>
+                        <td>{e.edad_min ?? '—'}a</td>
+                        <td>{e.anio_mas_nuevo ?? '—'}</td>
+                        <td>
+                          {e.id_eot && (
+                            <Link
+                              to={`/dashboard/antiguedad?empresa=${encodeURIComponent(e.id_eot)}`}
+                              className="btn btn-secondary btn-sm"
+                            >
+                              Ver
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

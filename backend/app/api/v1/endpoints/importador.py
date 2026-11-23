@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import require_roles
+from app.core.timezone import to_asuncion_iso
 from app.models import Auditoria
 from app.services.itv_excel import apply_import, build_preview, sincronizar_estado_desde_excel
 from app.services.empresa_excel_sync import apply_empresa_sync, build_empresa_sync_preview
@@ -91,7 +92,7 @@ async def historial_importaciones(
         tipo = _tipo_importacion(row.tabla_afectada, datos)
         items.append({
             "id_auditoria": row.id_auditoria,
-            "fecha": row.fecha_accion.isoformat() if row.fecha_accion else None,
+            "fecha": to_asuncion_iso(row.fecha_accion),
             "usuario": row.usuario or "Sistema",
             "tabla": row.tabla_afectada,
             "tipo": tipo,

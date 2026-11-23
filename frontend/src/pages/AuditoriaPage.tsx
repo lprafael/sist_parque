@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { auditoriaApi } from '../api'
 import { RefreshCw } from 'lucide-react'
+import { formatDateTimeAsuncion } from '../utils/date'
 
 export default function AuditoriaPage() {
   const [page] = useState(1)
@@ -52,7 +53,7 @@ export default function AuditoriaPage() {
                   <tr key={l.id_auditoria}>
                     <td>#{l.id_auditoria}</td>
                     <td style={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>
-                      {new Date(l.fecha_accion).toLocaleString('es-PY')}
+                      {formatDateTimeAsuncion(l.fecha_accion)}
                     </td>
                     <td>{l.tabla_afectada}</td>
                     <td>

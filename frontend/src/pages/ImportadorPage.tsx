@@ -4,6 +4,7 @@ import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Search, Play, Buildi
 import { importadorApi } from '../api'
 import { formatApiError } from '../api/client'
 import { useRol } from '../hooks/useRol'
+import { formatDateTimeAsuncion } from '../utils/date'
 
 type HistorialItem = {
   id_auditoria: number
@@ -696,7 +697,7 @@ export default function ImportadorPage() {
                   {histItems.map((h) => (
                     <tr key={h.id_auditoria}>
                       <td style={{ fontSize: '0.8rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                        {h.fecha ? new Date(h.fecha).toLocaleString('es-PY') : '—'}
+                        {formatDateTimeAsuncion(h.fecha)}
                       </td>
                       <td>
                         <span className="badge badge-por-vencer">

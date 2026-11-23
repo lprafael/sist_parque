@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import AsyncSessionLocal
 from app.core.security import SISTEMA_ID_PARQUE
+from app.core.timezone import now_utc_naive
 from app.models import Auditoria, LogAcceso, LogAuditoriaSistema
 
 _request_var: contextvars.ContextVar[Optional[Request]] = contextvars.ContextVar(
@@ -156,7 +157,7 @@ async def registrar_acceso(
         exitoso=exitoso,
         detalles=_json_safe(detalles) if detalles else None,
         sistema_id=SISTEMA_ID_PARQUE,
-        fecha=datetime.utcnow(),
+        fecha=now_utc_naive(),
     ))
 
 
@@ -186,7 +187,7 @@ async def registrar_auditoria(
         datos_nuevos=_json_safe(datos_nuevos),
         ip_address=client_ip(req),
         user_agent=user_agent(req),
-        fecha=datetime.utcnow(),
+        fecha=now_utc_naive(),
         detalles=(detalles or "")[:2000] or None,
         sistema_id=SISTEMA_ID_PARQUE,
     ))
@@ -204,6 +205,7 @@ async def registrar_auditoria(
             datos_anteriores=_json_safe(datos_anteriores),
             datos_nuevos=_json_safe(datos_nuevos),
             usuario=username[:100],
+            fecha_accion=now_utc_naive(),
         ))
     _audit_written_var.set(True)
 

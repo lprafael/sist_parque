@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { X, Calendar, Edit2 } from 'lucide-react'
 import { itvApi } from '../../api'
+import { formatDateTimeAsuncion } from '../../utils/date'
 
 interface ItvHistoryModalProps {
   isOpen: boolean
@@ -113,7 +114,7 @@ export default function ItvHistoryModal({
                   {historyItems.map((item: any) => (
                     <tr key={item.id_historial}>
                       <td style={{ color: 'var(--text-muted)' }}>
-                        {new Date(item.fecha_registro).toLocaleString('es-PY')}
+                        {formatDateTimeAsuncion(item.fecha_registro)}
                       </td>
                       <td style={{ opacity: 0.8 }}>
                         {formatDate(item.fecha_vencimiento_anterior)}

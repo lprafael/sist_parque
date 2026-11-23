@@ -6,6 +6,7 @@ from sqlalchemy import select, func, or_
 
 from app.core.database import get_db
 from app.core.security import require_roles
+from app.core.timezone import to_asuncion
 from app.models import Auditoria
 from app.schemas import AuditoriaOut
 
@@ -46,9 +47,16 @@ async def listar_auditoria(
     res = await db.execute(q)
     logs = res.scalars().all()
 
+    items = []
+    for log in logs:
+        out = AuditoriaOut.model_validate(log)
+        # Mostrar siempre en America/Asuncion (naive en DB se interpreta como UTC)
+        out.fecha_accion = to_asuncion(log.fecha_accion)
+        items.append(out)
+
     return {
         "total": total,
         "page": page,
         "page_size": page_size,
-        "items": [AuditoriaOut.model_validate(log) for log in logs]
+        "items": items,
     }

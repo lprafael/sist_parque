@@ -47,6 +47,7 @@ class UsuarioUpdate(BaseModel):
 class UsuarioOut(UsuarioBase):
     id_usuario: int
     estado_usuario: str
+    id_organismo: Optional[int] = None
     ultimo_acceso: Optional[datetime] = None
     fecha_registro: Optional[datetime] = None
 
@@ -522,6 +523,60 @@ class MensajeOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================
+# SAM (dispositivos / asignaciones bus)
+# ============================================================
+
+class DispositivoSamOut(BaseModel):
+    id_sam_interno: int
+    id_sam: str
+    eps: Optional[str] = None
+    modelo_validador: Optional[str] = None
+    numero_serie_hw: Optional[str] = None
+    estado: Optional[str] = None
+    fecha_alta: Optional[datetime] = None
+    observaciones: Optional[str] = None
+    asignado_actualmente: Optional[bool] = None
+    id_bus_actual: Optional[int] = None
+    rua_bus_actual: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SamBusOut(BaseModel):
+    id_asignacion_sam: int
+    id_bus: int
+    id_sam: str
+    fecha_inicio: datetime
+    fecha_fin: Optional[datetime] = None
+    tipo_instalacion: Optional[str] = None
+    motivo_asignacion: Optional[str] = None
+    usuario_registro: Optional[str] = None
+    fecha_registro: Optional[datetime] = None
+    vigente: bool = False
+    eps: Optional[str] = None
+    modelo_validador: Optional[str] = None
+    estado_sam: Optional[str] = None
+    bus_rua: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SamBusAsignar(BaseModel):
+    id_bus: int
+    id_sam: str
+    fecha_inicio: datetime
+    tipo_instalacion: Optional[str] = "TITULAR"
+    motivo_asignacion: Optional[str] = None
+
+
+class SamBusCerrar(BaseModel):
+    fecha_fin: datetime
+    motivo_asignacion: Optional[str] = None
 
 
 # ============================================================

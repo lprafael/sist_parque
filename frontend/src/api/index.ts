@@ -107,6 +107,23 @@ export const segurosApi = {
     api.get('/seguros', { params: { id_bus, page: 1, page_size: 100 } }),
 }
 
+// ── SAM ───────────────────────────────────────────
+export const samApi = {
+  dispositivos: (params?: Record<string, string | number | boolean>) =>
+    api.get('/sam/dispositivos', { params }),
+  historialBus: (id_bus: number) => api.get(`/sam/bus/${id_bus}`),
+  actualBus: (id_bus: number) => api.get(`/sam/bus/${id_bus}/actual`),
+  asignar: (data: {
+    id_bus: number
+    id_sam: string
+    fecha_inicio: string
+    tipo_instalacion?: string
+    motivo_asignacion?: string
+  }) => api.post('/sam/asignar', data),
+  cerrar: (id_bus: number, data: { fecha_fin: string; motivo_asignacion?: string }) =>
+    api.post(`/sam/bus/${id_bus}/cerrar`, data),
+}
+
 // ── Alertas ───────────────────────────────────────
 export const alertasApi = {
   listar: (params?: Record<string, string | number>) =>

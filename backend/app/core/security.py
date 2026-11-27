@@ -194,3 +194,23 @@ def require_roles(*roles: Union[str, List[str]]):
         return current_user
 
     return checker
+
+
+# Organismo EPS (Empresas Prestadoras de Servicio de Billetaje)
+ORGANISMO_EPS = 4
+
+
+def require_organismo(*organismos: int):
+    """Exige que el usuario pertenezca a uno de los organismos indicados."""
+    allowed = set(organismos)
+
+    async def checker(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+        org = getattr(current_user, "id_organismo", None)
+        if org not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado. Su organismo no tiene permiso para esta operación.",
+            )
+        return current_user
+
+    return checker

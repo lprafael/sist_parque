@@ -2,13 +2,14 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { busesApi, empresasApi, itvApi } from '../api'
-import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban, Hash, Shield, ChevronDown } from 'lucide-react'
+import { Search, Plus, RefreshCw, Edit2, X, Building2, Clock, Ban, Hash, Shield, ChevronDown, Cpu } from 'lucide-react'
 import { useRol } from '../hooks/useRol'
 import BusModal from '../components/buses/BusModal'
 import BajaModal from '../components/buses/BajaModal'
 import ItvHistoryModal from '../components/itv/ItvHistoryModal'
 import ItvModal from '../components/itv/ItvModal'
 import SeguroHistoryModal from '../components/seguros/SeguroHistoryModal'
+import SamHistoryModal from '../components/sam/SamHistoryModal'
 
 const ITV_ESTADO_OPTIONS: { key: string; label: string }[] = [
   { key: 'VIGENTE', label: 'ITV Vigente (>30 días)' },
@@ -133,7 +134,7 @@ function diasLabel(venc: string | null) {
 }
 
 export default function BusesPage() {
-  const { puedeEditar } = useRol()
+  const { puedeEditar, esEps } = useRol()
   const [searchParams, setSearchParams] = useSearchParams()
   const empresaParam = searchParams.get('empresa') ?? ''
   const estadoBusParam = searchParams.get('estado_bus') ?? ''
@@ -162,9 +163,10 @@ export default function BusesPage() {
   const [isBajaOpen, setIsBajaOpen]   = useState(false)
   const [busToBaja, setBusToBaja]     = useState<any>(null)
 
-  // Modales ITV / Seguro
+  // Modales ITV / Seguro / SAM
   const [isHistoryOpen, setIsHistoryOpen]                 = useState(false)
   const [isSeguroHistoryOpen, setIsSeguroHistoryOpen]     = useState(false)
+  const [isSamHistoryOpen, setIsSamHistoryOpen]           = useState(false)
   const [selectedBusForHistory, setSelectedBusForHistory] = useState<any>(null)
   const [isItvModalOpen, setIsItvModalOpen]               = useState(false)
   const [itvToEdit, setItvToEdit]                         = useState<any>(null)
@@ -172,7 +174,7 @@ export default function BusesPage() {
 
   const PAGE_SIZE = 25
 
-  const anyModalOpen = isModalOpen || isHistoryOpen || isSeguroHistoryOpen || isItvModalOpen || isBajaOpen
+  const anyModalOpen = isModalOpen || isHistoryOpen || isSeguroHistoryOpen || isSamHistoryOpen || isItvModalOpen || isBajaOpen
 
   // Foco en el buscador al entrar y al cerrar modales
   useEffect(() => {
@@ -303,6 +305,11 @@ export default function BusesPage() {
   const handleOpenSeguroHistory = (bus: any) => {
     setSelectedBusForHistory(bus)
     setIsSeguroHistoryOpen(true)
+  }
+
+  const handleOpenSamHistory = (bus: any) => {
+    setSelectedBusForHistory(bus)
+    setIsSamHistoryOpen(true)
   }
 
   const handleOpenEditItv = async (busId: number) => {
@@ -648,6 +655,25 @@ export default function BusesPage() {
                           >
                             <Shield size={13} /> Ver hist. Seguro
                           </button>
+                          {esEps && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.75rem',
+                                padding: '4px 8px',
+                                color: '#fbbf24',
+                                borderColor: 'rgba(251,191,36,0.35)',
+                                background: 'rgba(251,191,36,0.08)'
+                              }}
+                              onClick={() => handleOpenSamHistory(bus)}
+                              title="Ver / cambiar dispositivo SAM de este bus"
+                            >
+                              <Cpu size={13} /> Ver hist. SAM
+                            </button>
+                          )}
 
                           {puedeEditar && (
                             <button
@@ -724,6 +750,13 @@ export default function BusesPage() {
       <SeguroHistoryModal
         isOpen={isSeguroHistoryOpen}
         onClose={() => setIsSeguroHistoryOpen(false)}
+        busId={selectedBusForHistory?.id_bus ?? 0}
+        busRua={selectedBusForHistory?.rua}
+      />
+
+      <SamHistoryModal
+        isOpen={isSamHistoryOpen}
+        onClose={() => setIsSamHistoryOpen(false)}
         busId={selectedBusForHistory?.id_bus ?? 0}
         busRua={selectedBusForHistory?.rua}
       />

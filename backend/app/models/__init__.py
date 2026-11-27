@@ -2,7 +2,7 @@
 Modelos ORM SQLAlchemy — mapeados al schema registro_habilitacion de PostgreSQL.
 Tablas: usuarios(sistema), mensajes(sistema), buses, marcas, marcas_carroceria, tipos_carroceria,
 tipos_servicio, bus_empresa, itv_bus, seguros_bus, tipos_seguro, companias_seguros,
-documentos_bus, documentos_eot, alertas, auditoria, auxiliar
+documentos_bus, documentos_eot, alertas, auditoria, auxiliar, dispositivos_sam, sam_bus
 """
 
 from sqlalchemy import (
@@ -237,6 +237,7 @@ class Bus(Base):
     seguros            = relationship("SeguroBus", back_populates="bus")
     documentos         = relationship("DocumentoBus", back_populates="bus")
     alertas            = relationship("Alerta", back_populates="bus")
+    asignaciones_sam   = relationship("SamBus", back_populates="bus")
 
 
 class BusEmpresa(Base):
@@ -341,6 +342,42 @@ class SeguroBus(Base):
     bus      = relationship("Bus", back_populates="seguros")
     compania = relationship("CompaniaSeguro", back_populates="seguros")
     tipo     = relationship("TipoSeguro", back_populates="seguros")
+
+
+class DispositivoSam(Base):
+    """Catálogo de dispositivos SAM (billetera electrónica / validador)."""
+    __tablename__ = "dispositivos_sam"
+    __table_args__ = {"schema": SCHEMA}
+
+    id_sam_interno   = Column(Integer, primary_key=True, index=True)
+    id_sam           = Column(String(64), unique=True, nullable=False, index=True)
+    eps              = Column(String(50))
+    modelo_validador = Column(String(100))
+    numero_serie_hw  = Column(String(100))
+    estado           = Column(String(30), default="OPERATIVO")
+    fecha_alta       = Column(DateTime, default=func.now())
+    observaciones    = Column(Text)
+
+    asignaciones = relationship("SamBus", back_populates="dispositivo")
+
+
+class SamBus(Base):
+    """Historial de asignaciones SAM ↔ bus. Vigente = fecha_fin IS NULL."""
+    __tablename__ = "sam_bus"
+    __table_args__ = {"schema": SCHEMA}
+
+    id_asignacion_sam = Column(Integer, primary_key=True, index=True)
+    id_bus            = Column(Integer, ForeignKey(f"{SCHEMA}.buses.id_bus"), nullable=False, index=True)
+    id_sam            = Column(String(64), ForeignKey(f"{SCHEMA}.dispositivos_sam.id_sam"), nullable=False, index=True)
+    fecha_inicio      = Column(DateTime, nullable=False)
+    fecha_fin         = Column(DateTime)
+    tipo_instalacion  = Column(String(50), default="TITULAR")
+    motivo_asignacion = Column(Text)
+    usuario_registro  = Column(String(100))
+    fecha_registro    = Column(DateTime, default=func.now())
+
+    bus        = relationship("Bus", back_populates="asignaciones_sam")
+    dispositivo = relationship("DispositivoSam", back_populates="asignaciones")
 
 
 class DocumentoBus(Base):

@@ -8,6 +8,7 @@ interface Usuario {
   nombre_completo?: string
   rol: string
   estado_usuario: string
+  id_organismo?: number | null
 }
 
 interface AuthState {
